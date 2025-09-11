@@ -174,3 +174,4 @@ configs/permissions.json
 *.temp
 .DS_Store
 Thumbs.db
+*-audit.json
