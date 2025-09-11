@@ -1,0 +1,27 @@
+{
+  "server": {
+    "name": "WebAutomation",
+    "version": "0.1.0",
+    "description": "MCP System Automation Tool for AI-driven desktop control",
+    "debug": false
+  },
+  "safety": {
+    "require_confirmation": true,
+    "automation_bounds": null,
+    "max_actions_per_minute": 60,
+    "allowed_applications": null
+  },
+  "ocr": {
+    "confidence_threshold": 0.8,
+    "languages": ["en"],
+    "llm_config": {
+      "primary_provider": "claude",
+      "fallback_providers": ["gemini", "openai"],
+      "claude_model": "claude-3-5-sonnet-20241022",
+      "gemini_model": "gemini-2.5-flash", 
+      "openai_model": "gpt-4o-mini",
+      "timeout_seconds": 30,
+      "max_retries": 2
+    }
+  }
+}

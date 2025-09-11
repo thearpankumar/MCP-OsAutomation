@@ -1,0 +1,20 @@
+{
+    "keep": {
+        "days": true,
+        "amount": 14
+    },
+    "auditLog": "/home/warmachine/codes/Projcts/mcp-webautomation/logs/.2590ef9e5b7c5f0f740ac80964034d9658894a83-audit.json",
+    "files": [
+        {
+            "date": 1757605141351,
+            "name": "/home/warmachine/codes/Projcts/mcp-webautomation/logs/mcp-puppeteer-2025-09-11.log",
+            "hash": "6a1730c3163e3a41bbae46af412c420a120c4b37f22e625a8068395f6b4faafd"
+        },
+        {
+            "date": 1757618220452,
+            "name": "/home/warmachine/codes/Projcts/mcp-webautomation/logs/mcp-puppeteer-2025-09-12.log",
+            "hash": "7987ea1f17c53ec9a68f1f57f5f28836a6bac1904212ff7184c61436cfd8baf4"
+        }
+    ],
+    "hashType": "sha256"
+}
