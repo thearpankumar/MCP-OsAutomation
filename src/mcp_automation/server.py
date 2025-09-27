@@ -299,30 +299,33 @@ class WebAutomationServer:
         
         @self.mcp.tool()
         async def analyze_screen(
-            include_ocr: bool = True,
-            include_elements: bool = True,
+            include_ocr: bool = False,
+            analysis_detail: str = "standard",
             region: Optional[Dict[str, int]] = None,
-            ocr_provider: Optional[str] = None
+            monitor: int = 0,
+            vision_provider: str = "openai"
         ) -> Dict[str, Any]:
-            """Analyze current screen content and provide AI context.
+            """Analyze current screen content using LLM vision capabilities.
 
             Args:
-                include_ocr: Whether to include OCR text extraction
-                include_elements: Whether to include UI element detection
+                include_ocr: Whether to include OCR text extraction (default: False)
+                analysis_detail: Detail level ("brief", "standard", "detailed")
                 region: Optional region to analyze
-                ocr_provider: Optional OCR provider ("openai", "claude", "gemini")
+                monitor: Monitor number (0 for primary)
+                vision_provider: LLM provider for vision analysis ("openai", "claude", "gemini")
 
             Returns:
-                Complete screen analysis with AI context
+                Semantic screen analysis with LLM vision insights instead of raw coordinates
             """
             if not self.screen_analyzer:
                 raise RuntimeError("Screen analyzer not initialized")
 
             return await self.screen_analyzer.analyze_screen(
                 include_ocr=include_ocr,
-                include_elements=include_elements,
+                analysis_detail=analysis_detail,
                 region=region,
-                ocr_provider=ocr_provider
+                monitor=monitor,
+                vision_provider=vision_provider
             )
         
         @self.mcp.tool()

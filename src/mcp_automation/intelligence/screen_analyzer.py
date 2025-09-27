@@ -18,7 +18,6 @@ def safe_b64decode(data: str) -> bytes:
 from loguru import logger
 from pydantic import BaseModel
 
-from .cv_analyzer import ComputerVisionAnalyzer
 from .screenshot import ScreenshotCapture
 from ..utils.config import Config
 
@@ -27,20 +26,24 @@ from .llm_ocr_engine import LLMOCREngine as OCREngine
 
 
 class ScreenAnalysis(BaseModel):
-    """Complete screen analysis result."""
-    
+    """Complete screen analysis result with LLM vision insights."""
+
     success: bool
     timestamp: float
     processing_time: float
     screenshot: Dict[str, Any]
-    ocr_result: Optional[Dict[str, Any]] = None
-    cv_result: Optional[Dict[str, Any]] = None
-    screen_context: Dict[str, Any]
+    screen_description: str
+    programs_detected: List[str]
+    ui_state: str
+    actionable_elements: str
+    visual_context: str
+    ocr_text: Optional[str] = None
+    provider_used: str
     message: str
 
 
 class ScreenAnalyzer:
-    """Main screen analyzer combining all intelligence components."""
+    """Main screen analyzer using LLM vision for semantic understanding."""
     
     def __init__(self, config: Config):
         """Initialize screen analyzer.
@@ -53,7 +56,6 @@ class ScreenAnalyzer:
         # Initialize components
         self.screenshot_capture = ScreenshotCapture(config)
         self.ocr_engine = OCREngine(config)
-        self.cv_analyzer = ComputerVisionAnalyzer(config)
         
         self._initialized = False
         
@@ -65,8 +67,7 @@ class ScreenAnalyzer:
             # Initialize all components in parallel
             await asyncio.gather(
                 self.screenshot_capture.initialize(),
-                self.ocr_engine.initialize(),
-                self.cv_analyzer.initialize()
+                self.ocr_engine.initialize()
             )
             
             self._initialized = True
@@ -99,23 +100,23 @@ class ScreenAnalyzer:
     
     async def analyze_screen(
         self,
-        include_ocr: bool = True,
-        include_elements: bool = True,
+        include_ocr: bool = False,
+        analysis_detail: str = "standard",
         region: Optional[Dict[str, int]] = None,
         monitor: int = 0,
-        ocr_provider: Optional[str] = None
+        vision_provider: str = "openai"
     ) -> Dict[str, Any]:
-        """Perform comprehensive screen analysis.
+        """Perform comprehensive screen analysis using LLM vision.
 
         Args:
             include_ocr: Whether to include OCR text extraction
-            include_elements: Whether to include UI element detection
+            analysis_detail: Detail level ("brief", "standard", "detailed")
             region: Optional region to analyze
             monitor: Monitor to capture
-            ocr_provider: Optional OCR provider ("openai", "claude", "gemini")
+            vision_provider: LLM provider for vision analysis ("openai", "claude", "gemini")
 
         Returns:
-            Complete screen analysis
+            Semantic screen analysis with LLM vision insights
         """
         try:
             if not self._initialized:
@@ -142,52 +143,82 @@ class ScreenAnalyzer:
             
             # Get image data for analysis
             image_data = safe_b64decode(screenshot_result["base64_data"])
-            
-            # Step 2: Run OCR and CV analysis in parallel if requested
+
+            # Step 2: Run LLM vision analysis (primary) and optional OCR
             analysis_tasks = []
-            ocr_result = None
-            cv_result = None
-            
-            if include_ocr:
-                analysis_tasks.append(self.ocr_engine.extract_text_from_image(image_data, preferred_provider=ocr_provider))
-            
-            if include_elements:
-                analysis_tasks.append(self.cv_analyzer.analyze_image(image_data))
-            
-            # Execute analysis tasks
-            if analysis_tasks:
-                results = await asyncio.gather(*analysis_tasks, return_exceptions=True)
-                
-                result_idx = 0
-                if include_ocr:
-                    ocr_result = results[result_idx] if not isinstance(results[result_idx], Exception) else None
-                    result_idx += 1
-                
-                if include_elements:
-                    cv_result = results[result_idx] if not isinstance(results[result_idx], Exception) else None
-            
-            # Step 3: Generate screen context
-            screen_context = await self._generate_screen_context(
-                screenshot_result, ocr_result, cv_result
+
+            # Always run vision analysis (primary analysis method)
+            analysis_tasks.append(
+                self.ocr_engine.analyze_screen_content(
+                    image_data,
+                    detail_level=analysis_detail,
+                    preferred_provider=vision_provider
+                )
             )
+
+            # Optionally add OCR text extraction
+            ocr_result = None
+            if include_ocr:
+                analysis_tasks.append(
+                    self.ocr_engine.extract_text_from_image(
+                        image_data,
+                        preferred_provider=vision_provider
+                    )
+                )
+
+            # Execute analysis tasks
+            results = await asyncio.gather(*analysis_tasks, return_exceptions=True)
+
+            # Extract vision analysis result (always first)
+            vision_result = results[0] if not isinstance(results[0], Exception) else None
+
+            # Extract OCR result if requested (always second)
+            if include_ocr and len(results) > 1:
+                ocr_result = results[1] if not isinstance(results[1], Exception) else None
             
             processing_time = time.time() - start_time
-            
+
+            # Check if vision analysis succeeded
+            if not vision_result or not vision_result.get("success"):
+                return ScreenAnalysis(
+                    success=False,
+                    timestamp=start_time,
+                    processing_time=processing_time,
+                    screenshot=screenshot_result,
+                    screen_description="",
+                    programs_detected=[],
+                    ui_state="",
+                    actionable_elements="",
+                    visual_context="",
+                    ocr_text=None,
+                    provider_used=vision_result.get("provider_used", "unknown") if vision_result else "unknown",
+                    message=f"Vision analysis failed: {vision_result.get('message', 'Unknown error') if vision_result else 'Vision analysis returned no result'}"
+                ).model_dump()
+
             logger.info(
                 f"Screen analysis completed in {processing_time:.3f}s: "
-                f"OCR={'✓' if ocr_result and ocr_result.get('success') else '✗'}, "
-                f"CV={'✓' if cv_result and cv_result.get('success') else '✗'}"
+                f"Vision={'✓' if vision_result and vision_result.get('success') else '✗'}, "
+                f"OCR={'✓' if ocr_result and ocr_result.get('success') else '✗'}"
             )
-            
+
+            # Extract OCR text if available
+            ocr_text = None
+            if ocr_result and ocr_result.get("success"):
+                ocr_text = ocr_result.get("full_text", "")
+
             return ScreenAnalysis(
                 success=True,
                 timestamp=start_time,
                 processing_time=processing_time,
                 screenshot=screenshot_result,
-                ocr_result=ocr_result,
-                cv_result=cv_result,
-                screen_context=screen_context,
-                message=f"Screen analysis completed successfully in {processing_time:.3f}s"
+                screen_description=vision_result.get("screen_description", ""),
+                programs_detected=vision_result.get("programs_detected", []),
+                ui_state=vision_result.get("ui_state", ""),
+                actionable_elements=vision_result.get("actionable_elements", ""),
+                visual_context=vision_result.get("visual_context", ""),
+                ocr_text=ocr_text,
+                provider_used=vision_result.get("provider_used", "unknown"),
+                message=f"Screen analysis completed successfully in {processing_time:.3f}s using {vision_result.get('provider_used', 'unknown')}"
             ).model_dump()
             
         except Exception as e:
@@ -197,7 +228,13 @@ class ScreenAnalyzer:
                 timestamp=time.time(),
                 processing_time=0.0,
                 screenshot={},
-                screen_context={},
+                screen_description="",
+                programs_detected=[],
+                ui_state="",
+                actionable_elements="",
+                visual_context="",
+                ocr_text=None,
+                provider_used="unknown",
                 message=f"Screen analysis failed: {str(e)}"
             ).model_dump()
     
@@ -283,53 +320,52 @@ class ScreenAnalyzer:
         region: Optional[Dict[str, int]] = None,
         monitor: int = 0
     ) -> Dict[str, Any]:
-        """Detect UI elements on screen.
-        
+        """Detect UI elements on screen using LLM vision analysis.
+
+        Note: This method now uses LLM vision analysis instead of OpenCV.
+        For semantic understanding, use analyze_screen() instead.
+
         Args:
-            element_type: Optional element type filter (button, textbox, image)
+            element_type: Optional element type filter (legacy parameter)
             region: Optional region to analyze
             monitor: Monitor to analyze
-            
+
         Returns:
-            UI element detection results
+            UI element detection results (legacy format for compatibility)
         """
         try:
-            if not self._initialized:
-                raise RuntimeError("ScreenAnalyzer not initialized")
-            
-            # Capture screenshot
-            screenshot_result = await self.capture_screen(monitor=monitor, region=region)
-            
-            if not screenshot_result["success"]:
-                return {
-                    "success": False,
-                    "elements": [],
-                    "message": "Failed to capture screenshot"
-                }
-            
-            # Extract image data
-            image_data = safe_b64decode(screenshot_result["base64_data"])
-            
-            # Detect elements
-            if element_type:
-                cv_result = await self.cv_analyzer.find_elements_by_type(image_data, element_type)
-            else:
-                cv_result = await self.cv_analyzer.analyze_image(image_data)
-            
-            if cv_result["success"]:
+            logger.warning("detect_ui_elements() is deprecated. Use analyze_screen() for better semantic understanding.")
+
+            # Use LLM vision analysis instead of OpenCV
+            analysis_result = await self.analyze_screen(
+                include_ocr=False,
+                analysis_detail="detailed",
+                region=region,
+                monitor=monitor,
+                vision_provider="openai"
+            )
+
+            if analysis_result["success"]:
+                # Convert semantic analysis to legacy element format for compatibility
                 return {
                     "success": True,
-                    "elements": cv_result["elements"],
-                    "screenshot": screenshot_result,
-                    "message": f"Detected {len(cv_result['elements'])} UI elements"
+                    "elements": [],  # Legacy format - no longer provides coordinates
+                    "semantic_analysis": {
+                        "programs_detected": analysis_result["programs_detected"],
+                        "ui_state": analysis_result["ui_state"],
+                        "actionable_elements": analysis_result["actionable_elements"],
+                        "screen_description": analysis_result["screen_description"]
+                    },
+                    "screenshot": analysis_result["screenshot"],
+                    "message": "UI analysis completed using LLM vision (coordinates no longer provided)"
                 }
             else:
                 return {
                     "success": False,
                     "elements": [],
-                    "message": cv_result.get("message", "Element detection failed")
+                    "message": analysis_result.get("message", "UI element detection failed")
                 }
-            
+
         except Exception as e:
             logger.error(f"UI element detection failed: {e}")
             return {
@@ -489,7 +525,6 @@ class ScreenAnalyzer:
         await asyncio.gather(
             self.screenshot_capture.cleanup(),
             self.ocr_engine.cleanup(),
-            self.cv_analyzer.cleanup(),
             return_exceptions=True
         )
         

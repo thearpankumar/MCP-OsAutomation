@@ -528,11 +528,10 @@ Simply provide all the text you can see in the image, maintaining the natural re
                     "temperature": 0.0   # Deterministic for OCR
                 }
                 
-                # Shorter timeout for faster failure
-                timeout = aiohttp.ClientTimeout(total=30, connect=5, sock_read=20)
+                # Use default timeout (no restrictions) like the simple test script
                 connector = aiohttp.TCPConnector(limit=5, limit_per_host=2)
-                
-                async with aiohttp.ClientSession(connector=connector, timeout=timeout) as session:
+
+                async with aiohttp.ClientSession(connector=connector) as session:
                         async with session.post(
                             self.api_endpoints[LLMProvider.OPENAI],
                             headers=headers,
@@ -1052,7 +1051,167 @@ Simply provide all the text you can see in the image, maintaining the natural re
                 confidence_avg=0.0,
                 message=f"Region OCR failed: {str(e)}"
             ).model_dump()
-    
+
+    async def analyze_screen_content(
+        self,
+        image_data: bytes,
+        detail_level: str = "standard",
+        preferred_provider: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """Analyze screen content using LLM vision capabilities.
+
+        Args:
+            image_data: Image data as bytes
+            detail_level: Analysis detail level ("brief", "standard", "detailed")
+            preferred_provider: Optional preferred provider ("openai", "claude", "gemini")
+
+        Returns:
+            Screen analysis result with semantic description
+        """
+        try:
+            if not self._is_initialized:
+                raise RuntimeError("LLM OCR engine not initialized")
+
+            start_time = time.time()
+
+            # Get image dimensions
+            image = Image.open(io.BytesIO(image_data))
+            image_width, image_height = image.size
+
+            # Prepare image data
+            image_base64 = self._prepare_image_data(image_data)
+
+            # Create screen analysis prompt based on detail level
+            prompt = self._create_screen_analysis_prompt(detail_level)
+
+            # Call LLM with fallback
+            llm_result = await self._call_llm_with_fallback(image_base64, prompt, preferred_provider)
+
+            if not llm_result["success"]:
+                return {
+                    "success": False,
+                    "timestamp": start_time,
+                    "processing_time": time.time() - start_time,
+                    "screen_description": "",
+                    "programs_detected": [],
+                    "ui_state": "",
+                    "actionable_elements": "",
+                    "visual_context": "",
+                    "message": f"Screen analysis failed: {llm_result.get('error', 'Unknown error')}",
+                    "provider_used": llm_result.get("provider", "unknown")
+                }
+
+            # Parse LLM response
+            analysis_text = llm_result["content"]
+            provider_used = llm_result["provider"]
+
+            # Try to extract structured information from the response
+            parsed_analysis = self._parse_screen_analysis(analysis_text)
+
+            processing_time = time.time() - start_time
+
+            logger.info(
+                f"Screen analysis completed in {processing_time:.3f}s using {provider_used}"
+            )
+
+            return {
+                "success": True,
+                "timestamp": start_time,
+                "processing_time": processing_time,
+                "screen_description": parsed_analysis.get("description", analysis_text),
+                "programs_detected": parsed_analysis.get("programs", []),
+                "ui_state": parsed_analysis.get("ui_state", ""),
+                "actionable_elements": parsed_analysis.get("actionable_elements", ""),
+                "visual_context": f"Screen resolution: {image_width}x{image_height}",
+                "raw_analysis": analysis_text,
+                "message": f"Screen analysis completed successfully in {processing_time:.3f}s",
+                "provider_used": provider_used
+            }
+
+        except Exception as e:
+            logger.error(f"Screen analysis failed: {e}")
+            return {
+                "success": False,
+                "timestamp": time.time(),
+                "processing_time": 0.0,
+                "screen_description": "",
+                "programs_detected": [],
+                "ui_state": "",
+                "actionable_elements": "",
+                "visual_context": "",
+                "message": f"Screen analysis failed: {str(e)}",
+                "provider_used": "none"
+            }
+
+    def _create_screen_analysis_prompt(self, detail_level: str) -> str:
+        """Create screen analysis prompt based on detail level."""
+        base_instruction = "Analyze this desktop screenshot and provide insights about what's currently displayed."
+
+        if detail_level == "brief":
+            return f"{base_instruction} Provide a one-sentence summary of what's on the screen."
+
+        elif detail_level == "detailed":
+            return f"""{base_instruction}
+
+Provide a comprehensive analysis including:
+1. What applications/programs are currently open and active
+2. The current user workflow or activity (coding, browsing, writing, etc.)
+3. Window layouts and organization
+4. Available interactive elements (buttons, menus, text fields)
+5. Visual hierarchy and focus areas
+6. Any notifications, dialogs, or alerts
+7. Overall user interface state and context
+
+Be specific about application names, UI elements, and user actions."""
+
+        else:  # "standard"
+            return f"""{base_instruction}
+
+Describe:
+- What programs/applications are open
+- What the user appears to be doing
+- Key interactive elements that are visible
+- The overall state of the desktop/interface
+
+Provide a clear, concise description that would help someone understand the current screen context."""
+
+    def _parse_screen_analysis(self, analysis_text: str) -> Dict[str, Any]:
+        """Parse screen analysis text to extract structured information."""
+        parsed = {
+            "description": analysis_text,
+            "programs": [],
+            "ui_state": "",
+            "actionable_elements": ""
+        }
+
+        # Simple keyword extraction for common applications
+        app_keywords = {
+            "Visual Studio Code": ["vs code", "vscode", "visual studio code"],
+            "Chrome": ["chrome", "google chrome", "browser"],
+            "Firefox": ["firefox", "mozilla"],
+            "Terminal": ["terminal", "command line", "bash", "shell"],
+            "File Manager": ["file manager", "explorer", "finder", "nautilus"],
+            "Text Editor": ["text editor", "notepad", "gedit"],
+            "IDE": ["ide", "integrated development"]
+        }
+
+        analysis_lower = analysis_text.lower()
+        for app_name, keywords in app_keywords.items():
+            if any(keyword in analysis_lower for keyword in keywords):
+                parsed["programs"].append(app_name)
+
+        # Extract UI state information
+        if "coding" in analysis_lower or "programming" in analysis_lower:
+            parsed["ui_state"] = "Active development/coding session"
+        elif "browsing" in analysis_lower or "web" in analysis_lower:
+            parsed["ui_state"] = "Web browsing session"
+        elif "writing" in analysis_lower or "document" in analysis_lower:
+            parsed["ui_state"] = "Document editing/writing"
+        else:
+            parsed["ui_state"] = "General desktop usage"
+
+        return parsed
+
     async def cleanup(self) -> None:
         """Cleanup LLM OCR engine resources."""
         try:

@@ -38,22 +38,38 @@ async def main():
             else:
                 print(f"❌ Screenshot failed: {screenshot_result['message']}")
         
-        # Test screen analysis
-        print("\n🔍 Testing screen analysis...", file=sys.stderr)
+        # Test screen analysis with LLM vision
+        print("\n🔍 Testing screen analysis with LLM vision...", file=sys.stderr)
         if server.screen_analyzer:
             analysis_result = await server.screen_analyzer.analyze_screen(
-                include_ocr=True,
-                include_elements=True,
-                ocr_provider="openai"  # Test the new OCR provider selection
+                include_ocr=False,  # Test vision-only analysis first
+                analysis_detail="standard",
+                vision_provider="openai"  # Test the new vision provider
             )
             if analysis_result["success"]:
-                ocr_words = analysis_result["ocr_result"]["word_count"] if analysis_result["ocr_result"] else 0
-                ui_elements = len(analysis_result["cv_result"]["elements"]) if analysis_result["cv_result"] else 0
-                print(f"✅ Screen analysis completed: {ocr_words} words, {ui_elements} UI elements")
-                print(f"   Summary: {analysis_result['screen_context']['summary']}", file=sys.stderr)
+                programs = ", ".join(analysis_result["programs_detected"]) if analysis_result["programs_detected"] else "None detected"
+                print(f"✅ Screen analysis completed using {analysis_result['provider_used']}")
+                print(f"   Programs detected: {programs}", file=sys.stderr)
+                print(f"   UI State: {analysis_result['ui_state']}", file=sys.stderr)
+                print(f"   Description: {analysis_result['screen_description'][:100]}...", file=sys.stderr)
             else:
                 print(f"❌ Screen analysis failed: {analysis_result['message']}")
-        
+
+        # Test OCR functionality (if vision analysis succeeded)
+        if server.screen_analyzer and analysis_result.get("success"):
+            print("\n📝 Testing OCR text extraction...", file=sys.stderr)
+            ocr_analysis = await server.screen_analyzer.analyze_screen(
+                include_ocr=True,  # Now test with OCR enabled
+                analysis_detail="brief",
+                vision_provider="openai"
+            )
+            if ocr_analysis["success"] and ocr_analysis.get("ocr_text"):
+                word_count = len(ocr_analysis["ocr_text"].split())
+                print(f"✅ OCR extraction successful: {word_count} words extracted", file=sys.stderr)
+                print(f"   Sample text: {ocr_analysis['ocr_text'][:80]}...", file=sys.stderr)
+            else:
+                print(f"ℹ️ OCR text extraction: No text found or OCR disabled", file=sys.stderr)
+
         # Test permission system
         print("\n🔐 Testing permission system...", file=sys.stderr)
         if server.permission_manager:
@@ -83,6 +99,11 @@ async def main():
                 print(f"❌ Failed to get mouse position: {mouse_pos.get('message', 'Unknown error')}", file=sys.stderr)
         
         print("\n✅ All tests completed successfully!", file=sys.stderr)
+        print("\n🎉 New LLM Vision Analysis Features Tested:")
+        print("   • Semantic screen understanding (not just coordinates)")
+        print("   • Program detection and workflow analysis")
+        print("   • Optional OCR text extraction")
+        print("   • Multiple detail levels (brief/standard/detailed)")
         print("\n💡 To run the full MCP server, use:")
         print("   python -m mcp_automation.server --transport stdio", file=sys.stderr)
         
