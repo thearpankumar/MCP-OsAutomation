@@ -64,7 +64,7 @@ Examples:
     if args.test:
         # Test mode - run tests and exit
         print("🧪 Running functionality tests...", file=sys.stderr)
-        from examples.basic_usage import main as test_main
+        from tests.basic_usage import main as test_main
         try:
             asyncio.run(test_main())
             print("✅ Tests completed successfully!", file=sys.stderr)

@@ -124,7 +124,7 @@ class LLMOCREngine:
         env_locations = [
             current_dir / ".env",
             current_dir.parent / ".env",
-            current_dir.parent.parent / ".env",  # For when running from examples/
+            current_dir.parent.parent / ".env",  # For when running from tests/
             Path(__file__).parent.parent.parent.parent / ".env"  # Project root
         ]
         
