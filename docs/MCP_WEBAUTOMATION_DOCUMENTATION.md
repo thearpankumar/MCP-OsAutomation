@@ -340,7 +340,25 @@ All tools return a consistent error format:
 
 1. Install dependencies: `pip install -r requirements.txt`
 2. Set environment variables in `.env` file
-3. Run server: `python start_server.py --transport stdio`
+3. Configure Claude Code MCP connection in `~/.claude.json`:
+```json
+{
+  "mcpServers": {
+    "webautomation": {
+      "command": "python",
+      "args": [
+        "<your-project-dir>/start_server.py",
+        "--transport",
+        "stdio"
+      ],
+      "cwd": "<your-project-dir>",
+      "env": {
+        "PATH": "<your-project-dir>/.venv/bin:$PATH"
+      }
+    }
+  }
+}
+```
 4. Test functionality: `python start_server.py --test`
 
 ## API Reference

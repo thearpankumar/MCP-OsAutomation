@@ -163,11 +163,16 @@ cython_debug/
 .vscode/
 
 # MCP WebAutomation specific
+logs/
 logs/*.log
+logs/*.gz
 screenshots/*.png
 screenshots/*.jpg
 screenshots/*.jpeg
 configs/permissions.json
+test.py
+test_*.py
+*_test.py
 
 # Temporary files
 *.tmp

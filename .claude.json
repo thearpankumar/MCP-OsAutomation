@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "webautomation": {
+      "command": "python",
+      "args": [
+        "<your-project-dir>/start_server.py",
+        "--transport",
+        "stdio"
+      ],
+      "cwd": "<your-project-dir>",
+      "env": {
+        "PATH": "<your-project-dir>/.venv/bin:$PATH"
+      }
+    }
+  }
+}
