@@ -8,6 +8,14 @@ and no dependency management issues.
 import asyncio
 import base64
 import json
+
+def safe_b64decode(data: str) -> bytes:
+    """Safely decode base64 data with automatic padding fix."""
+    # Add padding if missing (base64 length should be multiple of 4)
+    missing_padding = len(data) % 4
+    if missing_padding:
+        data += '=' * (4 - missing_padding)
+    return base64.b64decode(data)
 import io
 import os
 import time
@@ -85,9 +93,9 @@ class LLMOCREngine:
         
         # Provider preference order (fallback chain)
         self.provider_chain = [
+            LLMProvider.OPENAI,
             LLMProvider.CLAUDE,
-            LLMProvider.GEMINI,
-            LLMProvider.OPENAI
+            LLMProvider.GEMINI
         ]
         
         # API endpoints
@@ -242,7 +250,7 @@ Simply provide all the text you can see in the image, maintaining the natural re
         
         # Detect image format from base64 data
         try:
-            image_bytes = base64.b64decode(image_base64)
+            image_bytes = safe_b64decode(image_base64)
             image = Image.open(io.BytesIO(image_bytes))
             image_format = image.format.lower() if image.format else "png"
         except:
@@ -304,7 +312,7 @@ Simply provide all the text you can see in the image, maintaining the natural re
         try:
             # Detect image format
             try:
-                image_bytes = base64.b64decode(image_base64)
+                image_bytes = safe_b64decode(image_base64)
                 image = Image.open(io.BytesIO(image_bytes))
                 mime_type = f"image/{image.format.lower()}" if image.format else "image/png"
             except Exception as e:
@@ -459,7 +467,7 @@ Simply provide all the text you can see in the image, maintaining the natural re
                 
                 # Validate and process image
                 try:
-                    image_bytes = base64.b64decode(image_base64)
+                    image_bytes = safe_b64decode(image_base64)
                     image = Image.open(io.BytesIO(image_bytes))
                     
                     # Optimize image size for OpenAI (only resize if extremely large)
@@ -575,19 +583,38 @@ Simply provide all the text you can see in the image, maintaining the natural re
         # If we get here, all retries failed
         return {"success": False, "error": f"OpenAI API failed after {max_retries} attempts"}
     
-    async def _call_llm_with_fallback(self, image_base64: str, prompt: str) -> Dict[str, Any]:
+    async def _call_llm_with_fallback(self, image_base64: str, prompt: str, preferred_provider: Optional[str] = None) -> Dict[str, Any]:
         """Call LLM APIs with fallback chain.
-        
+
         Args:
             image_base64: Base64 encoded image
             prompt: OCR prompt
-            
+            preferred_provider: Optional preferred provider ("openai", "claude", "gemini")
+
         Returns:
             API response from first successful provider
         """
         last_errors = []
-        
-        for provider in self.provider_chain:
+
+        # Determine provider order
+        if preferred_provider:
+            # Try preferred provider first, then fallback to chain
+            provider_enum = None
+            if preferred_provider.lower() == "openai":
+                provider_enum = LLMProvider.OPENAI
+            elif preferred_provider.lower() == "claude":
+                provider_enum = LLMProvider.CLAUDE
+            elif preferred_provider.lower() == "gemini":
+                provider_enum = LLMProvider.GEMINI
+
+            if provider_enum:
+                provider_order = [provider_enum] + [p for p in self.provider_chain if p != provider_enum]
+            else:
+                provider_order = self.provider_chain
+        else:
+            provider_order = self.provider_chain
+
+        for provider in provider_order:
             try:
                 logger.debug(f"Trying {provider.value} for OCR...")
                 
@@ -732,14 +759,16 @@ Simply provide all the text you can see in the image, maintaining the natural re
     async def extract_text_from_image(
         self,
         image_data: bytes,
-        confidence_threshold: Optional[float] = None
+        confidence_threshold: Optional[float] = None,
+        preferred_provider: Optional[str] = None
     ) -> Dict[str, Any]:
         """Extract text from image data using LLM vision models.
-        
+
         Args:
             image_data: Image data as bytes
             confidence_threshold: Minimum confidence threshold (for compatibility)
-            
+            preferred_provider: Optional preferred provider ("openai", "claude", "gemini")
+
         Returns:
             OCR result with extracted text
         """
@@ -787,10 +816,10 @@ Simply provide all the text you can see in the image, maintaining the natural re
                     confidence_avg=0.95,
                     message="Demo mode: LLM OCR simulation completed (set API keys for real OCR)",
                     provider_used="demo"
-                ).dict()
+                ).model_dump()
             
             # Call LLM with fallback
-            llm_result = await self._call_llm_with_fallback(image_base64, prompt)
+            llm_result = await self._call_llm_with_fallback(image_base64, prompt, preferred_provider)
             
             if not llm_result["success"]:
                 return OCRResult(
@@ -802,7 +831,7 @@ Simply provide all the text you can see in the image, maintaining the natural re
                     word_count=0,
                     confidence_avg=0.0,
                     message=f"LLM OCR failed: {llm_result.get('error', 'Unknown error')}"
-                ).dict()
+                ).model_dump()
             
             # Parse response
             content = llm_result["content"]
@@ -850,7 +879,7 @@ Simply provide all the text you can see in the image, maintaining the natural re
                 confidence_avg=confidence_avg,
                 message=f"LLM OCR completed successfully with {len(text_detections)} text detections",
                 provider_used=llm_result['provider']
-            ).dict()
+            ).model_dump()
             
         except Exception as e:
             logger.error(f"LLM OCR failed: {e}")
@@ -863,7 +892,7 @@ Simply provide all the text you can see in the image, maintaining the natural re
                 word_count=0,
                 confidence_avg=0.0,
                 message=f"LLM OCR failed: {str(e)}"
-            ).dict()
+            ).model_dump()
     
     async def extract_text_from_base64(
         self,
@@ -881,7 +910,7 @@ Simply provide all the text you can see in the image, maintaining the natural re
         """
         try:
             # Decode base64
-            image_data = base64.b64decode(base64_data)
+            image_data = safe_b64decode(base64_data)
             
             # Process with OCR
             return await self.extract_text_from_image(image_data, confidence_threshold)
@@ -897,29 +926,31 @@ Simply provide all the text you can see in the image, maintaining the natural re
                 word_count=0,
                 confidence_avg=0.0,
                 message=f"Failed to process base64 image: {str(e)}"
-            ).dict()
+            ).model_dump()
     
     async def find_text_in_image(
         self,
         image_data: bytes,
         search_text: str,
         confidence_threshold: Optional[float] = None,
-        case_sensitive: bool = False
+        case_sensitive: bool = False,
+        preferred_provider: Optional[str] = None
     ) -> Dict[str, Any]:
         """Find specific text in image.
-        
+
         Args:
             image_data: Image data as bytes
             search_text: Text to search for
             confidence_threshold: Minimum confidence threshold
             case_sensitive: Whether search should be case sensitive
+            preferred_provider: Optional preferred provider ("openai", "claude", "gemini")
             
         Returns:
             Search result with matching text locations
         """
         try:
             # Extract all text from image
-            ocr_result = await self.extract_text_from_image(image_data, confidence_threshold)
+            ocr_result = await self.extract_text_from_image(image_data, confidence_threshold, preferred_provider)
             
             if not ocr_result["success"]:
                 return ocr_result
@@ -1020,7 +1051,7 @@ Simply provide all the text you can see in the image, maintaining the natural re
                 word_count=0,
                 confidence_avg=0.0,
                 message=f"Region OCR failed: {str(e)}"
-            ).dict()
+            ).model_dump()
     
     async def cleanup(self) -> None:
         """Cleanup LLM OCR engine resources."""

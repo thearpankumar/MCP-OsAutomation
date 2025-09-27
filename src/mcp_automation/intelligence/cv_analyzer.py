@@ -434,7 +434,7 @@ class ComputerVisionAnalyzer:
                 elements=all_elements,
                 image_properties=image_properties,
                 message=f"Successfully analyzed image and detected {len(all_elements)} elements"
-            ).dict()
+            ).model_dump()
             
         except Exception as e:
             logger.error(f"CV analysis failed: {e}")
@@ -445,7 +445,7 @@ class ComputerVisionAnalyzer:
                 elements=[],
                 image_properties={},
                 message=f"CV analysis failed: {str(e)}"
-            ).dict()
+            ).model_dump()
     
     async def find_elements_by_type(
         self,

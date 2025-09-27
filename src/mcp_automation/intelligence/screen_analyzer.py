@@ -7,6 +7,14 @@ import base64
 import time
 from typing import Any, Dict, List, Optional
 
+def safe_b64decode(data: str) -> bytes:
+    """Safely decode base64 data with automatic padding fix."""
+    # Add padding if missing (base64 length should be multiple of 4)
+    missing_padding = len(data) % 4
+    if missing_padding:
+        data += '=' * (4 - missing_padding)
+    return base64.b64decode(data)
+
 from loguru import logger
 from pydantic import BaseModel
 
@@ -94,16 +102,18 @@ class ScreenAnalyzer:
         include_ocr: bool = True,
         include_elements: bool = True,
         region: Optional[Dict[str, int]] = None,
-        monitor: int = 0
+        monitor: int = 0,
+        ocr_provider: Optional[str] = None
     ) -> Dict[str, Any]:
         """Perform comprehensive screen analysis.
-        
+
         Args:
             include_ocr: Whether to include OCR text extraction
             include_elements: Whether to include UI element detection
             region: Optional region to analyze
             monitor: Monitor to capture
-            
+            ocr_provider: Optional OCR provider ("openai", "claude", "gemini")
+
         Returns:
             Complete screen analysis
         """
@@ -128,10 +138,10 @@ class ScreenAnalyzer:
                     screenshot=screenshot_result,
                     screen_context={},
                     message="Failed to capture screenshot"
-                ).dict()
+                ).model_dump()
             
             # Get image data for analysis
-            image_data = base64.b64decode(screenshot_result["base64_data"])
+            image_data = safe_b64decode(screenshot_result["base64_data"])
             
             # Step 2: Run OCR and CV analysis in parallel if requested
             analysis_tasks = []
@@ -139,7 +149,7 @@ class ScreenAnalyzer:
             cv_result = None
             
             if include_ocr:
-                analysis_tasks.append(self.ocr_engine.extract_text_from_image(image_data))
+                analysis_tasks.append(self.ocr_engine.extract_text_from_image(image_data, preferred_provider=ocr_provider))
             
             if include_elements:
                 analysis_tasks.append(self.cv_analyzer.analyze_image(image_data))
@@ -178,7 +188,7 @@ class ScreenAnalyzer:
                 cv_result=cv_result,
                 screen_context=screen_context,
                 message=f"Screen analysis completed successfully in {processing_time:.3f}s"
-            ).dict()
+            ).model_dump()
             
         except Exception as e:
             logger.error(f"Screen analysis failed: {e}")
@@ -189,7 +199,7 @@ class ScreenAnalyzer:
                 screenshot={},
                 screen_context={},
                 message=f"Screen analysis failed: {str(e)}"
-            ).dict()
+            ).model_dump()
     
     async def find_text(
         self,
@@ -225,7 +235,7 @@ class ScreenAnalyzer:
                 }
             
             # Extract image data
-            image_data = base64.b64decode(screenshot_result["base64_data"])
+            image_data = safe_b64decode(screenshot_result["base64_data"])
             
             # Search for text using OCR
             search_result = await self.ocr_engine.find_text_in_image(
@@ -298,7 +308,7 @@ class ScreenAnalyzer:
                 }
             
             # Extract image data
-            image_data = base64.b64decode(screenshot_result["base64_data"])
+            image_data = safe_b64decode(screenshot_result["base64_data"])
             
             # Detect elements
             if element_type:

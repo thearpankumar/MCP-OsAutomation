@@ -8,6 +8,14 @@ import io
 import time
 from typing import Any, Dict, List, Optional, Tuple
 
+def safe_b64decode(data: str) -> bytes:
+    """Safely decode base64 data with automatic padding fix."""
+    # Add padding if missing (base64 length should be multiple of 4)
+    missing_padding = len(data) % 4
+    if missing_padding:
+        data += '=' * (4 - missing_padding)
+    return base64.b64decode(data)
+
 import mss
 import numpy as np
 from PIL import Image
@@ -111,7 +119,7 @@ class ScreenshotCapture:
         Returns:
             List of screen information dictionaries
         """
-        return [screen.dict() for screen in self._screens]
+        return [screen.model_dump() for screen in self._screens]
     
     async def capture_screen(
         self,
@@ -145,7 +153,7 @@ class ScreenshotCapture:
                     format=format,
                     size_bytes=0,
                     message=f"Invalid monitor number: {monitor}"
-                ).dict()
+                ).model_dump()
             
             # Determine capture area
             if region:
@@ -202,7 +210,7 @@ class ScreenshotCapture:
                 size_bytes=len(img_data),
                 base64_data=base64_data,
                 message=f"Screenshot captured successfully in {capture_time:.3f}s"
-            ).dict()
+            ).model_dump()
             
         except Exception as e:
             logger.error(f"Screenshot capture failed: {e}")
@@ -217,7 +225,7 @@ class ScreenshotCapture:
                 format=format,
                 size_bytes=0,
                 message=f"Screenshot capture failed: {str(e)}"
-            ).dict()
+            ).model_dump()
     
     async def capture_all_screens(
         self,
@@ -272,7 +280,7 @@ class ScreenshotCapture:
                 return result
             
             # Decode base64 and save to file
-            img_data = base64.b64decode(result["base64_data"])
+            img_data = safe_b64decode(result["base64_data"])
             
             with open(file_path, 'wb') as f:
                 f.write(img_data)
@@ -366,7 +374,7 @@ class ScreenshotCapture:
                 return
             
             prev_image = Image.open(io.BytesIO(
-                base64.b64decode(prev_result["base64_data"])
+                safe_b64decode(prev_result["base64_data"])
             ))
             prev_array = np.array(prev_image)
             
@@ -379,7 +387,7 @@ class ScreenshotCapture:
                     continue
                 
                 curr_image = Image.open(io.BytesIO(
-                    base64.b64decode(curr_result["base64_data"])
+                    safe_b64decode(curr_result["base64_data"])
                 ))
                 curr_array = np.array(curr_image)
                 

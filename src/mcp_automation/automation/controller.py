@@ -184,7 +184,7 @@ class AutomationController:
                     clicks=clicks,
                     timestamp=time.time(),
                     message="Rate limit exceeded"
-                ).dict()
+                ).model_dump()
             
             # Determine coordinates
             if element_text and not (x and y):
@@ -204,7 +204,7 @@ class AutomationController:
                     clicks=clicks,
                     timestamp=time.time(),
                     message="Coordinates outside automation bounds"
-                ).dict()
+                ).model_dump()
             
             # Map button names
             button_map = {
@@ -237,7 +237,7 @@ class AutomationController:
                 clicks=clicks,
                 timestamp=time.time(),
                 message=f"Successfully clicked at ({x}, {y})"
-            ).dict()
+            ).model_dump()
             
         except Exception as e:
             logger.error(f"Click failed: {e}")
@@ -249,7 +249,7 @@ class AutomationController:
                 clicks=clicks,
                 timestamp=time.time(),
                 message=f"Click failed: {str(e)}"
-            ).dict()
+            ).model_dump()
     
     async def type_text(
         self,
@@ -276,7 +276,7 @@ class AutomationController:
                     characters_typed=0,
                     timestamp=time.time(),
                     message="Rate limit exceeded"
-                ).dict()
+                ).model_dump()
             
             characters_typed = 0
             
@@ -311,7 +311,7 @@ class AutomationController:
                 characters_typed=characters_typed,
                 timestamp=time.time(),
                 message=f"Successfully typed {characters_typed} characters"
-            ).dict()
+            ).model_dump()
             
         except Exception as e:
             logger.error(f"Type text failed: {e}")
@@ -321,7 +321,7 @@ class AutomationController:
                 characters_typed=0,
                 timestamp=time.time(),
                 message=f"Type text failed: {str(e)}"
-            ).dict()
+            ).model_dump()
     
     async def press_key(
         self,

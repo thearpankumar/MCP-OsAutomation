@@ -43,7 +43,8 @@ async def main():
         if server.screen_analyzer:
             analysis_result = await server.screen_analyzer.analyze_screen(
                 include_ocr=True,
-                include_elements=True
+                include_elements=True,
+                ocr_provider="openai"  # Test the new OCR provider selection
             )
             if analysis_result["success"]:
                 ocr_words = analysis_result["ocr_result"]["word_count"] if analysis_result["ocr_result"] else 0

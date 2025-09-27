@@ -301,25 +301,28 @@ class WebAutomationServer:
         async def analyze_screen(
             include_ocr: bool = True,
             include_elements: bool = True,
-            region: Optional[Dict[str, int]] = None
+            region: Optional[Dict[str, int]] = None,
+            ocr_provider: Optional[str] = None
         ) -> Dict[str, Any]:
             """Analyze current screen content and provide AI context.
-            
+
             Args:
                 include_ocr: Whether to include OCR text extraction
                 include_elements: Whether to include UI element detection
                 region: Optional region to analyze
-                
+                ocr_provider: Optional OCR provider ("openai", "claude", "gemini")
+
             Returns:
                 Complete screen analysis with AI context
             """
             if not self.screen_analyzer:
                 raise RuntimeError("Screen analyzer not initialized")
-                
+
             return await self.screen_analyzer.analyze_screen(
                 include_ocr=include_ocr,
                 include_elements=include_elements,
-                region=region
+                region=region,
+                ocr_provider=ocr_provider
             )
         
         @self.mcp.tool()
