@@ -107,6 +107,11 @@ Instead of hardcoded coordinates, the system **understands** forms:
 - Understands both graphics and text
 - Context-aware decision making
 
+### 6. **Future Enchancements** 
+- teaching mode (tells the cli Coder how to work with a pirticular application)
+- memory system (cli coder should remember how to use \
+ that work with that application new session)
+
 ## 🏆 Market Position
 
 **There is literally nothing like this available today:**
