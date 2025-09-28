@@ -6,12 +6,11 @@ The MCP WebAutomation Server is a comprehensive Model Context Protocol (MCP) ser
 
 ## Architecture
 
-The server is built on FastMCP 2.0 and provides a set of tools that allow AI agents to:
-- Analyze screen content using LLM vision models
-- Capture screenshots across multiple monitors
-- Control mouse and keyboard input
-- Extract text from images using OCR
-- Search for specific UI elements and text
+The server is built on FastMCP 2.0 and provides a streamlined set of tools that allow AI agents to:
+- Analyze screen content using LLM vision models (with optional OCR)
+- Control mouse and keyboard input intelligently
+- Perform automation tasks with semantic understanding
+- Safely stop all automation activities
 
 ## Core Components
 
@@ -31,6 +30,8 @@ The server is built on FastMCP 2.0 and provides a set of tools that allow AI age
 - **Session Management**: Temporary and persistent permission grants
 
 ## Available Tools
+
+The MCP WebAutomation server provides 5 streamlined tools optimized for LLM usage:
 
 ### `analyze_screen`
 **Purpose**: Provides semantic understanding of screen content using LLM vision models.
@@ -64,46 +65,15 @@ The server is built on FastMCP 2.0 and provides a set of tools that allow AI age
 
 ---
 
-### `capture_screen`
-**Purpose**: Captures screenshot of specified monitor or region.
-
-**Parameters**:
-- `monitor` (int, default: 0): Monitor number (0 for primary)
-- `region` (object, optional): Region to capture {x, y, width, height}
-- `format` (string, default: "png"): Image format ("png", "jpeg", "webp")
-
-**Returns**:
-```json
-{
-  "success": true,
-  "timestamp": 1695123456.789,
-  "monitor": 0,
-  "width": 1920,
-  "height": 1080,
-  "format": "png",
-  "size_bytes": 2048576,
-  "base64_data": "iVBORw0KGgoAAAANSUhEUgAA...",
-  "message": "Screenshot captured successfully"
-}
-```
-
-**Use Cases**:
-- Visual documentation and logging
-- Image-based analysis workflows
-- Multi-monitor screenshot capture
-- Custom region extraction
-
----
-
 ### `click_element`
-**Purpose**: Performs mouse click operations at specified coordinates.
+**Purpose**: Smart clicking by coordinates or element text.
 
 **Parameters**:
-- `x` (int): X coordinate for click
-- `y` (int): Y coordinate for click
+- `x` (int, optional): X coordinate for click (if not using element_text)
+- `y` (int, optional): Y coordinate for click (if not using element_text)
+- `element_text` (string, optional): Text to find and click
 - `button` (string, default: "left"): Mouse button ("left", "right", "middle")
 - `clicks` (int, default: 1): Number of clicks
-- `element_text` (string, optional): Text description for click target
 
 **Returns**:
 ```json
@@ -182,61 +152,25 @@ The server is built on FastMCP 2.0 and provides a set of tools that allow AI age
 
 ---
 
-### `find_text`
-**Purpose**: Locates specific text on the screen using OCR.
-
-**Parameters**:
-- `text` (string): Text to search for
-- `confidence` (float, optional): Minimum confidence threshold (0.0-1.0)
-- `region` (object, optional): Search region {x, y, width, height}
-- `monitor` (int, default: 0): Monitor to search on
-
-**Returns**:
-```json
-{
-  "success": true,
-  "text": "Save",
-  "matches": [
-    {
-      "text": "Save",
-      "confidence": 0.95,
-      "center_x": 150,
-      "center_y": 75,
-      "bbox": [100, 50, 200, 100]
-    }
-  ],
-  "message": "Found 1 matches for 'Save'"
-}
-```
-
-**Use Cases**:
-- UI element location by text content
-- Button and menu item finding
-- Text verification and validation
-- Dynamic UI interaction
-
----
-
-### `get_mouse_position`
-**Purpose**: Retrieves current mouse cursor coordinates.
+### `emergency_stop`
+**Purpose**: Immediately stops all automation activities for safety.
 
 **Parameters**: None
 
 **Returns**:
 ```json
 {
-  "success": true,
-  "x": 456,
-  "y": 789,
-  "message": "Mouse position retrieved successfully"
+  "status": "stopped",
+  "message": "All automation activities stopped",
+  "timestamp": 1695123456.789
 }
 ```
 
 **Use Cases**:
-- Cursor position tracking
-- Relative positioning calculations
-- UI element proximity detection
-- Mouse movement verification
+- Emergency safety stop
+- Halt runaway automation
+- Reset automation state
+- Safety testing and validation
 
 ## Configuration
 
@@ -276,27 +210,37 @@ print(f"Description: {result['screen_description']}")
 ### UI Automation Workflow
 ```python
 # 1. Analyze screen to understand context
-screen = await client.call_tool("analyze_screen", {})
-
-# 2. Find specific text element
-button = await client.call_tool("find_text", {
-    "text": "Submit",
-    "confidence": 0.8
+screen = await client.call_tool("analyze_screen", {
+    "analysis_detail": "standard",
+    "vision_provider": "openai"
 })
 
-# 3. Click the found element
-if button["success"] and button["matches"]:
-    match = button["matches"][0]
-    await client.call_tool("click_element", {
-        "x": match["center_x"],
-        "y": match["center_y"]
-    })
+print(f"Current state: {screen['screen_description']}")
+print(f"Programs: {screen['programs_detected']}")
+
+# 2. Click element by text (smart finding)
+await client.call_tool("click_element", {
+    "element_text": "Submit"
+})
+
+# Or use coordinates if known
+await client.call_tool("click_element", {
+    "x": 150,
+    "y": 75
+})
 ```
 
 ### Multi-Step Form Automation
 ```python
+# Analyze screen first
+screen = await client.call_tool("analyze_screen", {
+    "include_ocr": true  # Include text extraction
+})
+
 # Fill and submit a form
-await client.call_tool("click_element", {"x": 200, "y": 100})  # Click name field
+await client.call_tool("click_element", {
+    "element_text": "Name"  # Find name field by text
+})
 await client.call_tool("type_text", {
     "text": "John Doe",
     "clear_first": true
@@ -304,8 +248,13 @@ await client.call_tool("type_text", {
 
 await client.call_tool("press_key", {"key": "tab"})  # Move to next field
 await client.call_tool("type_text", {
-    "text": "john@example.com",
-    "submit": true
+    "text": "john@example.com"
+})
+
+# Submit with keyboard shortcut or button click
+await client.call_tool("press_key", {
+    "key": "enter",
+    "modifiers": ["ctrl"]
 })
 ```
 
@@ -359,7 +308,22 @@ All tools return a consistent error format:
   }
 }
 ```
-4. Test functionality: `python start_server.py --test`
+4. **Configure permissions** in `.claude/settings.local.json`:
+```json
+{
+  "permissions": {
+    "allow": [
+      "mcp__webautomation__press_key",
+      "mcp__webautomation__analyze_screen",
+      "mcp__webautomation__click_element",
+      "mcp__webautomation__type_text"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
+```
+5. Test functionality: `python start_server.py --test`
 
 ## API Reference
 

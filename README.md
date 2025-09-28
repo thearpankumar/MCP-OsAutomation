@@ -51,12 +51,12 @@ selenium.click(x=445, y=123)
 ### MCP WebAutomation (Intelligent)
 ```python
 # Understands and adapts
-screen = analyze_screen()
-# "VS Code editor with file browser open, user editing main.py"
+screen = analyze_screen(analysis_detail="standard", vision_provider="openai")
+# Returns: "The desktop shows VS Code editor with file browser open, user editing main.py..."
 
-if "VS Code" in screen.programs_detected:
+if "VS Code" in screen["programs_detected"]:
     # Intelligent context-aware actions
-    find_and_click("Save")  # Works regardless of theme/layout
+    click_element(element_text="Save")  # Works regardless of theme/layout
 ```
 
 ## 🎯 Real-World Magic
@@ -89,12 +89,14 @@ Instead of hardcoded coordinates, the system **understands** forms:
 - No UI mapping or screenshot databases
 - Works out-of-the-box with any application
 
-### 3. **Natural Language Automation**
+### 3. **Streamlined MCP Tools**
 ```python
-# Write automation like you think
-"Find the download button and click it"
-"Fill the form with user details"
-"Save the current document"
+# 5 powerful tools for complete desktop control:
+analyze_screen()           # LLM vision analysis of current screen
+click_element()           # Smart clicking by coordinates or text
+type_text()              # Intelligent text input
+press_key()              # Keyboard shortcuts and combinations
+emergency_stop()         # Safety stop for all automation
 ```
 
 ### 4. **Intelligent Error Recovery**
@@ -129,13 +131,21 @@ Instead of hardcoded coordinates, the system **understands** forms:
 
 ## 🛠 Built for the AI Era
 
-### Claude Code Integration
+### Claude::Gemini::qwen::OpenCoder etc Code Integration
 ```json
 {
   "mcpServers": {
     "webautomation": {
       "command": "python",
-      "args": ["start_server.py", "--transport", "stdio"]
+      "args": [
+        "<your-project-dir>/start_server.py",
+        "--transport",
+        "stdio"
+      ],
+      "cwd": "<your-project-dir>",
+      "env": {
+        "PATH": "<your-project-dir>/.venv/bin:$PATH"
+      }
     }
   }
 }
@@ -147,13 +157,33 @@ Instead of hardcoded coordinates, the system **understands** forms:
 - **Multi-provider architecture**
 - **Rate-limited and secure**
 
+### Permissions Configuration
+For proper operation, add these permissions to your Claude settings:
+
+```json
+{
+  "permissions": {
+    "allow": [
+      "mcp__webautomation__press_key",
+      "mcp__webautomation__analyze_screen",
+      "mcp__webautomation__click_element",
+      "mcp__webautomation__type_text"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
+```
+
+Add this to `.claude/settings.local.json` for the tools to work properly.
+
 ## 🚀 Get Started in Minutes
 
 1. **Clone and Setup**
    ```bash
    git clone <repo>
    cd MCP-OsAutomation
-   pip install -r requirements.txt
+   uv run python start_server.py --test
    ```
 
 2. **Add Your API Keys**
@@ -163,12 +193,13 @@ Instead of hardcoded coordinates, the system **understands** forms:
 
 3. **Test the Magic**
    ```bash
-   python start_server.py --test
+   uv run python start_server.py --test
    ```
 
 4. **Connect to Claude Code**
    - Copy `.claude.json` to `~/.claude.json`
    - Replace `<your-project-dir>` with actual path
+   - Add permissions to `.claude/settings.local.json` (see above)
    - Start automating with AI!
 
 ## 🎨 Use Cases That Weren't Possible Before
@@ -178,6 +209,26 @@ Instead of hardcoded coordinates, the system **understands** forms:
 - **Cross-App Workflows**: Seamless automation across different tools
 - **Dynamic Screenshots**: Intelligent screen capture with context
 - **AI-Powered QA**: Testing that understands user intent, not just clicks
+
+## 🛠 Current MCP Tools
+
+Our streamlined toolkit provides everything needed for intelligent desktop automation:
+
+### Core Tools
+
+| Tool | Purpose | Example |
+|------|---------|---------|
+| `analyze_screen()` | LLM vision analysis with optional OCR | Get semantic understanding of current screen |
+| `click_element()` | Smart clicking by coordinates or text | Click buttons, links, or UI elements |
+| `type_text()` | Intelligent text input with options | Fill forms, enter commands, write text |
+| `press_key()` | Keyboard shortcuts and combinations | Ctrl+S, Alt+Tab, function keys |
+| `emergency_stop()` | Safety stop for all automation | Immediately halt all automation activities |
+
+### Key Features
+- **Token-optimized**: No massive base64 responses that break LLM interactions
+- **LLM-focused**: Returns semantic data LLMs can understand and act on
+- **Complete coverage**: Everything needed for desktop automation
+- **Fallback safety**: Emergency stop for safe operation
 
 ## 🔮 The Future is Here
 

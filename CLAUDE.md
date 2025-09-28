@@ -3,6 +3,18 @@
 ## Overview
 This MCP WebAutomation server provides intelligent desktop automation capabilities. As Claude Code, you can use these tools to analyze screens, control the desktop, and automate complex workflows through semantic understanding rather than rigid coordinate-based scripts.
 
+## Available Tools (5 Total)
+
+| Tool | Purpose |
+|------|---------|
+| `analyze_screen()` | LLM vision analysis of current screen (with optional OCR) |
+| `click_element()` | Smart clicking by coordinates or text |
+| `type_text()` | Intelligent text input with options |
+| `press_key()` | Keyboard shortcuts and combinations |
+| `emergency_stop()` | Safety stop for all automation |
+
+**Key Changes**: Removed `capture_screen` and `find_text` tools to eliminate token overflow issues and redundancy.
+
 ## Quick Start for Claude Code
 
 ### 1. Understanding Screen Context
@@ -50,18 +62,16 @@ if "coding session" in screen['ui_state']:
 
 #### Pattern 1: Smart Element Finding
 ```python
-# Find UI elements by text rather than hardcoded coordinates
-button_search = mcp.call_tool("find_text", {
-    "text": "Save",
-    "confidence": 0.8
+# Click UI elements by text rather than hardcoded coordinates
+mcp.call_tool("click_element", {
+    "element_text": "Save"
 })
 
-if button_search["success"] and button_search["matches"]:
-    match = button_search["matches"][0]
-    mcp.call_tool("click_element", {
-        "x": match["center_x"],
-        "y": match["center_y"]
-    })
+# Or get screen analysis with OCR for text finding
+screen = mcp.call_tool("analyze_screen", {
+    "include_ocr": True
+})
+# Then use coordinates if needed
 ```
 
 #### Pattern 2: Context-Aware Automation
@@ -98,13 +108,7 @@ def automate_form_filling():
     mcp.call_tool("type_text", {"text": "john@example.com"})
 
     # 5. Submit
-    submit_btn = mcp.call_tool("find_text", {"text": "Submit"})
-    if submit_btn["success"]:
-        match = submit_btn["matches"][0]
-        mcp.call_tool("click_element", {
-            "x": match["center_x"],
-            "y": match["center_y"]
-        })
+    mcp.call_tool("click_element", {"element_text": "Submit"})
 ```
 
 ## Tool Reference for Claude Code
@@ -180,34 +184,13 @@ mcp.call_tool("press_key", {"key": "enter"})    # Confirm
 mcp.call_tool("press_key", {"key": "escape"})   # Cancel
 ```
 
-### Helper Tools
+### Safety Tools
 
-#### `find_text` - Element Location
+#### `emergency_stop` - Safety Control
 ```python
-# Find specific UI elements
-element = mcp.call_tool("find_text", {
-    "text": "Download",
-    "confidence": 0.7  # Lower for fuzzy matching
-})
-
-# Search in specific region
-region_search = mcp.call_tool("find_text", {
-    "text": "Submit",
-    "region": {"x": 0, "y": 400, "width": 800, "height": 200}
-})
-```
-
-#### `capture_screen` - Visual Documentation
-```python
-# Capture for analysis or logging
-screenshot = mcp.call_tool("capture_screen", {
-    "format": "png"
-})
-
-# Capture specific region
-region_capture = mcp.call_tool("capture_screen", {
-    "region": {"x": 100, "y": 100, "width": 500, "height": 300}
-})
+# Stop all automation immediately
+result = mcp.call_tool("emergency_stop")
+print(f"Status: {result['status']}")  # "stopped"
 ```
 
 ## Advanced Usage Patterns for Claude Code
@@ -236,18 +219,13 @@ def smart_automation():
 def robust_click_action(element_text, max_retries=3):
     """Click with verification and retry logic"""
     for attempt in range(max_retries):
-        # Find element
-        search = mcp.call_tool("find_text", {"text": element_text})
+        # Use smart element clicking
+        click_result = mcp.call_tool("click_element", {
+            "element_text": element_text
+        })
 
-        if search["success"] and search["matches"]:
-            match = search["matches"][0]
-            click_result = mcp.call_tool("click_element", {
-                "x": match["center_x"],
-                "y": match["center_y"]
-            })
-
-            if click_result["success"]:
-                return click_result
+        if click_result["success"]:
+            return click_result
 
         # Wait and retry
         time.sleep(1)
@@ -297,11 +275,12 @@ def intelligent_automation():
 
 ### 2. Prefer Text-Based Element Finding
 ```python
-# ✅ Better: Find by text (robust)
-search = mcp.call_tool("find_text", {"text": "Save"})
-if search["success"]:
-    match = search["matches"][0]
-    mcp.call_tool("click_element", {"x": match["center_x"], "y": match["center_y"]})
+# ✅ Better: Smart clicking by text (robust)
+mcp.call_tool("click_element", {"element_text": "Save"})
+
+# ✅ Also good: Use analyze_screen for complex scenarios
+screen = mcp.call_tool("analyze_screen", {"include_ocr": True})
+# Then use the screen analysis to understand context
 
 # ❌ Avoid: Hardcoded coordinates (brittle)
 mcp.call_tool("click_element", {"x": 100, "y": 200})  # May break on different screens

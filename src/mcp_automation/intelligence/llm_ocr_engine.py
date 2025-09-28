@@ -8,14 +8,6 @@ and no dependency management issues.
 import asyncio
 import base64
 import json
-
-def safe_b64decode(data: str) -> bytes:
-    """Safely decode base64 data with automatic padding fix."""
-    # Add padding if missing (base64 length should be multiple of 4)
-    missing_padding = len(data) % 4
-    if missing_padding:
-        data += '=' * (4 - missing_padding)
-    return base64.b64decode(data)
 import io
 import os
 import time
@@ -36,6 +28,15 @@ except ImportError:
     logger.warning("python-dotenv not available. Install with: pip install python-dotenv")
 
 from ..utils.config import Config
+
+
+def safe_b64decode(data: str) -> bytes:
+    """Safely decode base64 data with automatic padding fix."""
+    # Add padding if missing (base64 length should be multiple of 4)
+    missing_padding = len(data) % 4
+    if missing_padding:
+        data += '=' * (4 - missing_padding)
+    return base64.b64decode(data)
 
 
 class LLMProvider(str, Enum):
@@ -513,7 +514,7 @@ Simply provide all the text you can see in the image, maintaining the natural re
                         {
                             "role": "user",
                             "content": [
-                                {"type": "text", "text": "Extract ALL visible text from this image. Include every word, number, symbol, button text, menu items, labels, and any other readable text. Format as JSON with text and coordinates."},
+                                {"type": "text", "text": prompt},
                                 {
                                     "type": "image_url",
                                     "image_url": {
@@ -1123,7 +1124,6 @@ Simply provide all the text you can see in the image, maintaining the natural re
                 "ui_state": parsed_analysis.get("ui_state", ""),
                 "actionable_elements": parsed_analysis.get("actionable_elements", ""),
                 "visual_context": f"Screen resolution: {image_width}x{image_height}",
-                "raw_analysis": analysis_text,
                 "message": f"Screen analysis completed successfully in {processing_time:.3f}s",
                 "provider_used": provider_used
             }
@@ -1145,35 +1145,28 @@ Simply provide all the text you can see in the image, maintaining the natural re
 
     def _create_screen_analysis_prompt(self, detail_level: str) -> str:
         """Create screen analysis prompt based on detail level."""
-        base_instruction = "Analyze this desktop screenshot and provide insights about what's currently displayed."
+        base_instruction = "Analyze this desktop screenshot and provide a comprehensive description of what's currently happening on the screen."
 
         if detail_level == "brief":
-            return f"{base_instruction} Provide a one-sentence summary of what's on the screen."
+            return f"""{base_instruction}
+
+IMPORTANT: Provide exactly 100-150 words in paragraph format. Do NOT use JSON, bullet points, or lists.
+
+Describe what's visible on the screen, including any applications, text content, and what the user appears to be doing. Focus on the main activity and context."""
 
         elif detail_level == "detailed":
             return f"""{base_instruction}
 
-Provide a comprehensive analysis including:
-1. What applications/programs are currently open and active
-2. The current user workflow or activity (coding, browsing, writing, etc.)
-3. Window layouts and organization
-4. Available interactive elements (buttons, menus, text fields)
-5. Visual hierarchy and focus areas
-6. Any notifications, dialogs, or alerts
-7. Overall user interface state and context
+IMPORTANT: Provide exactly 300-350 words in paragraph format. Do NOT use JSON, bullet points, or lists.
 
-Be specific about application names, UI elements, and user actions."""
+Provide a comprehensive analysis of what's happening on the screen. Describe all visible applications, the specific content being displayed, what the user is actively doing, any commands being run, error messages, file contents, or processes in progress. Include details about the interface state, any interactive elements visible, and the overall workflow or task being performed. Be very specific about the actual content and activities visible."""
 
         else:  # "standard"
             return f"""{base_instruction}
 
-Describe:
-- What programs/applications are open
-- What the user appears to be doing
-- Key interactive elements that are visible
-- The overall state of the desktop/interface
+IMPORTANT: Provide exactly 250 words in paragraph format. Do NOT use JSON, bullet points, or lists.
 
-Provide a clear, concise description that would help someone understand the current screen context."""
+Describe in detail what's happening on the screen, including what applications are open, what specific content is being displayed, what the user is actively doing, any commands being executed, and the current state of any processes. Include information about visible text, file names, error messages, or any ongoing activities. Explain the context and purpose of what the user appears to be working on based on the visible elements."""
 
     def _parse_screen_analysis(self, analysis_text: str) -> Dict[str, Any]:
         """Parse screen analysis text to extract structured information."""

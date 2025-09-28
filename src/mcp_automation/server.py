@@ -173,30 +173,6 @@ class WebAutomationServer:
         """Setup all MCP tools."""
         
         # Core automation tools
-        @self.mcp.tool()
-        async def capture_screen(
-            monitor: int = 0,
-            region: Optional[Dict[str, int]] = None,
-            format: str = "png"
-        ) -> Dict[str, Any]:
-            """Capture screenshot of specified monitor or region.
-            
-            Args:
-                monitor: Monitor number (0 for primary)
-                region: Optional region dict with x, y, width, height
-                format: Image format (png, jpeg, webp)
-                
-            Returns:
-                Screenshot data and metadata
-            """
-            if not self.screen_analyzer:
-                raise RuntimeError("Screen analyzer not initialized")
-                
-            return await self.screen_analyzer.capture_screen(
-                monitor=monitor,
-                region=region,
-                format=format
-            )
         
         @self.mcp.tool()
         async def click_element(
@@ -328,30 +304,6 @@ class WebAutomationServer:
                 vision_provider=vision_provider
             )
         
-        @self.mcp.tool()
-        async def find_text(
-            text: str,
-            confidence: Optional[float] = None,
-            region: Optional[Dict[str, int]] = None
-        ) -> Dict[str, Any]:
-            """Find text on screen using OCR.
-            
-            Args:
-                text: Text to find
-                confidence: Minimum confidence threshold
-                region: Optional region to search in
-                
-            Returns:
-                Text locations and confidence scores
-            """
-            if not self.screen_analyzer:
-                raise RuntimeError("Screen analyzer not initialized")
-                
-            return await self.screen_analyzer.find_text(
-                text=text,
-                confidence=confidence or self.config.ocr.confidence_threshold,
-                region=region
-            )
         
         @self.mcp.tool()
         async def emergency_stop() -> Dict[str, Any]:

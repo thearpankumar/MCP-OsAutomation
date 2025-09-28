@@ -7,14 +7,6 @@ import base64
 import time
 from typing import Any, Dict, List, Optional
 
-def safe_b64decode(data: str) -> bytes:
-    """Safely decode base64 data with automatic padding fix."""
-    # Add padding if missing (base64 length should be multiple of 4)
-    missing_padding = len(data) % 4
-    if missing_padding:
-        data += '=' * (4 - missing_padding)
-    return base64.b64decode(data)
-
 from loguru import logger
 from pydantic import BaseModel
 
@@ -22,7 +14,7 @@ from .screenshot import ScreenshotCapture
 from ..utils.config import Config
 
 # Import OCR engine - now only LLM-based OCR
-from .llm_ocr_engine import LLMOCREngine as OCREngine
+from .llm_ocr_engine import LLMOCREngine as OCREngine, safe_b64decode
 
 
 class ScreenAnalysis(BaseModel):
@@ -136,8 +128,14 @@ class ScreenAnalyzer:
                     success=False,
                     timestamp=start_time,
                     processing_time=time.time() - start_time,
-                    screenshot=screenshot_result,
-                    screen_context={},
+                    screenshot={},
+                    screen_description="",
+                    programs_detected=[],
+                    ui_state="",
+                    actionable_elements="",
+                    visual_context="",
+                    ocr_text=None,
+                    provider_used="unknown",
                     message="Failed to capture screenshot"
                 ).model_dump()
             
@@ -184,7 +182,7 @@ class ScreenAnalyzer:
                     success=False,
                     timestamp=start_time,
                     processing_time=processing_time,
-                    screenshot=screenshot_result,
+                    screenshot={},
                     screen_description="",
                     programs_detected=[],
                     ui_state="",
@@ -210,7 +208,7 @@ class ScreenAnalyzer:
                 success=True,
                 timestamp=start_time,
                 processing_time=processing_time,
-                screenshot=screenshot_result,
+                screenshot={},  # Empty - no screenshot data needed
                 screen_description=vision_result.get("screen_description", ""),
                 programs_detected=vision_result.get("programs_detected", []),
                 ui_state=vision_result.get("ui_state", ""),
@@ -392,7 +390,6 @@ class ScreenAnalyzer:
             # Perform full screen analysis
             analysis = await self.analyze_screen(
                 include_ocr=True,
-                include_elements=True,
                 monitor=monitor
             )
             
@@ -406,23 +403,21 @@ class ScreenAnalyzer:
             # Build context summary
             context = {
                 "screen_info": {
-                    "width": analysis["screenshot"]["width"],
-                    "height": analysis["screenshot"]["height"],
                     "monitor": monitor,
                     "timestamp": analysis["timestamp"]
                 },
                 "text_content": {
-                    "full_text": analysis["ocr_result"]["full_text"] if analysis["ocr_result"] else "",
-                    "word_count": analysis["ocr_result"]["word_count"] if analysis["ocr_result"] else 0,
-                    "confidence": analysis["ocr_result"]["confidence_avg"] if analysis["ocr_result"] else 0.0
+                    "full_text": analysis["ocr_text"] if analysis["ocr_text"] else "",
+                    "has_text": bool(analysis["ocr_text"])
                 },
-                "ui_elements": {
-                    "total_count": len(analysis["cv_result"]["elements"]) if analysis["cv_result"] else 0,
-                    "buttons": len([e for e in analysis["cv_result"]["elements"] if e["type"] == "button"]) if analysis["cv_result"] else 0,
-                    "textboxes": len([e for e in analysis["cv_result"]["elements"] if e["type"] == "textbox"]) if analysis["cv_result"] else 0,
-                    "images": len([e for e in analysis["cv_result"]["elements"] if e["type"] == "image"]) if analysis["cv_result"] else 0
+                "semantic_analysis": {
+                    "screen_description": analysis["screen_description"],
+                    "programs_detected": analysis["programs_detected"],
+                    "ui_state": analysis["ui_state"],
+                    "actionable_elements": analysis["actionable_elements"],
+                    "visual_context": analysis["visual_context"]
                 },
-                "analysis_summary": analysis["screen_context"]
+                "analysis_summary": analysis["message"]
             }
             
             # Include screenshot if requested
