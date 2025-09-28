@@ -33,17 +33,21 @@ The server is built on FastMCP 2.0 and provides a streamlined set of tools that 
 
 The MCP WebAutomation server provides 5 streamlined tools optimized for LLM usage:
 
-### `analyze_screen`
-**Purpose**: Provides semantic understanding of screen content using LLM vision models.
+### `analyze_screen` - 🎯 ENHANCED DUAL MODE
+**Purpose**: Provides semantic understanding of screen content with TWO powerful modes:
+- **COORDINATE MODE** (`include_ocr=false`): Returns clickable element coordinates
+- **TEXT MODE** (`include_ocr=true`): Returns OCR text extraction
 
 **Parameters**:
-- `include_ocr` (bool, default: false): Include OCR text extraction
+- `include_ocr` (bool, default: false): **KEY PARAMETER**
+  - `false` → COORDINATE MODE: Returns `clickable_elements` with pixel coordinates
+  - `true` → TEXT MODE: Returns `ocr_text` content (no coordinates)
 - `analysis_detail` (string, default: "standard"): Detail level ("brief", "standard", "detailed")
 - `region` (object, optional): Specific screen region {x, y, width, height}
 - `monitor` (int, default: 0): Monitor number (0 for primary)
 - `vision_provider` (string, default: "openai"): LLM provider ("openai", "claude", "gemini")
 
-**Returns**:
+**Returns (COORDINATE MODE - include_ocr=false)**:
 ```json
 {
   "success": true,
@@ -52,15 +56,65 @@ The MCP WebAutomation server provides 5 streamlined tools optimized for LLM usag
   "ui_state": "Active development/coding session",
   "actionable_elements": "File tree, editor tabs, terminal commands",
   "visual_context": "Screen resolution: 1920x1080",
-  "ocr_text": "...", // Only if include_ocr=true
+  "clickable_elements": [
+    {
+      "type": "button",
+      "text": "Save",
+      "x": 150,
+      "y": 200,
+      "width": 80,
+      "height": 30
+    },
+    {
+      "type": "menu",
+      "text": "File",
+      "x": 50,
+      "y": 25,
+      "width": 40,
+      "height": 20
+    },
+    {
+      "type": "tab",
+      "text": "main.py",
+      "x": 200,
+      "y": 60,
+      "width": 60,
+      "height": 25
+    }
+  ],
+  "ocr_text": null,
   "provider_used": "openai"
 }
 ```
 
+**Returns (TEXT MODE - include_ocr=true)**:
+```json
+{
+  "success": true,
+  "screen_description": "VS Code editor with Python file open, terminal at bottom",
+  "programs_detected": ["Visual Studio Code"],
+  "ui_state": "Active development/coding session",
+  "actionable_elements": "File tree, editor tabs, terminal commands",
+  "visual_context": "Screen resolution: 1920x1080",
+  "clickable_elements": null,
+  "ocr_text": "def main():\n    print('Hello World')\n    return 0\n\nif __name__ == '__main__':\n    main()",
+  "provider_used": "openai"
+}
+```
+
+**Clickable Element Types**:
+- `button`: Interactive buttons
+- `menu`: Menu items and dropdowns
+- `link`: Links and hyperlinks
+- `input`: Text input fields
+- `tab`: Tab headers
+- `icon`: Clickable icons
+
 **Use Cases**:
+- **COORDINATE MODE**: Precise UI automation, button clicking, menu navigation
+- **TEXT MODE**: Screen content reading, code analysis, document processing
 - Understanding current application state
 - Workflow analysis and context awareness
-- UI element identification for automation
 - Screen state verification
 
 ---

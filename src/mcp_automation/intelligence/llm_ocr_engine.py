@@ -1057,7 +1057,8 @@ Simply provide all the text you can see in the image, maintaining the natural re
         self,
         image_data: bytes,
         detail_level: str = "standard",
-        preferred_provider: Optional[str] = None
+        preferred_provider: Optional[str] = None,
+        include_coordinates: bool = False
     ) -> Dict[str, Any]:
         """Analyze screen content using LLM vision capabilities.
 
@@ -1065,9 +1066,10 @@ Simply provide all the text you can see in the image, maintaining the natural re
             image_data: Image data as bytes
             detail_level: Analysis detail level ("brief", "standard", "detailed")
             preferred_provider: Optional preferred provider ("openai", "claude", "gemini")
+            include_coordinates: Whether to include clickable element coordinates
 
         Returns:
-            Screen analysis result with semantic description
+            Screen analysis result with semantic description and optional coordinates
         """
         try:
             if not self._is_initialized:
@@ -1082,8 +1084,8 @@ Simply provide all the text you can see in the image, maintaining the natural re
             # Prepare image data
             image_base64 = self._prepare_image_data(image_data)
 
-            # Create screen analysis prompt based on detail level
-            prompt = self._create_screen_analysis_prompt(detail_level)
+            # Create screen analysis prompt based on detail level and coordinate requirements
+            prompt = self._create_screen_analysis_prompt(detail_level, include_coordinates)
 
             # Call LLM with fallback
             llm_result = await self._call_llm_with_fallback(image_base64, prompt, preferred_provider)
@@ -1098,6 +1100,7 @@ Simply provide all the text you can see in the image, maintaining the natural re
                     "ui_state": "",
                     "actionable_elements": "",
                     "visual_context": "",
+                    "clickable_elements": [] if include_coordinates else None,
                     "message": f"Screen analysis failed: {llm_result.get('error', 'Unknown error')}",
                     "provider_used": llm_result.get("provider", "unknown")
                 }
@@ -1107,7 +1110,7 @@ Simply provide all the text you can see in the image, maintaining the natural re
             provider_used = llm_result["provider"]
 
             # Try to extract structured information from the response
-            parsed_analysis = self._parse_screen_analysis(analysis_text)
+            parsed_analysis = self._parse_screen_analysis(analysis_text, include_coordinates)
 
             processing_time = time.time() - start_time
 
@@ -1124,6 +1127,7 @@ Simply provide all the text you can see in the image, maintaining the natural re
                 "ui_state": parsed_analysis.get("ui_state", ""),
                 "actionable_elements": parsed_analysis.get("actionable_elements", ""),
                 "visual_context": f"Screen resolution: {image_width}x{image_height}",
+                "clickable_elements": parsed_analysis.get("clickable_elements"),
                 "message": f"Screen analysis completed successfully in {processing_time:.3f}s",
                 "provider_used": provider_used
             }
@@ -1139,14 +1143,43 @@ Simply provide all the text you can see in the image, maintaining the natural re
                 "ui_state": "",
                 "actionable_elements": "",
                 "visual_context": "",
+                "clickable_elements": [] if include_coordinates else None,
                 "message": f"Screen analysis failed: {str(e)}",
                 "provider_used": "none"
             }
 
-    def _create_screen_analysis_prompt(self, detail_level: str) -> str:
-        """Create screen analysis prompt based on detail level."""
+    def _create_screen_analysis_prompt(self, detail_level: str, include_coordinates: bool = False) -> str:
+        """Create screen analysis prompt based on detail level and coordinate requirements."""
         base_instruction = "Analyze this desktop screenshot and provide a comprehensive description of what's currently happening on the screen."
 
+        if include_coordinates:
+            # Coordinate mode - return structured JSON with clickable elements
+            return f"""{base_instruction}
+
+IMPORTANT: Respond with a JSON object in this exact format:
+{{
+  "description": "Comprehensive description of what's happening on screen (200-250 words)",
+  "programs_detected": ["App1", "App2"],
+  "ui_state": "Brief description of current UI state",
+  "actionable_elements": "Summary of interactive elements available",
+  "clickable_elements": [
+    {{"type": "button", "text": "Button Text", "x": 150, "y": 200, "width": 80, "height": 30}},
+    {{"type": "menu", "text": "Menu Text", "x": 50, "y": 25, "width": 60, "height": 20}},
+    {{"type": "link", "text": "Link Text", "x": 300, "y": 400, "width": 100, "height": 25}}
+  ]
+}}
+
+For clickable_elements, identify ALL interactive UI elements you can see:
+- Buttons (type: "button")
+- Menu items (type: "menu")
+- Links (type: "link")
+- Text inputs (type: "input")
+- Tabs (type: "tab")
+- Icons (type: "icon")
+
+Provide pixel coordinates (x, y) for the CENTER of each element, plus width and height. Be precise with coordinates based on the actual screen layout you see."""
+
+        # Text-only modes (original functionality)
         if detail_level == "brief":
             return f"""{base_instruction}
 
@@ -1168,13 +1201,35 @@ IMPORTANT: Provide exactly 250 words in paragraph format. Do NOT use JSON, bulle
 
 Describe in detail what's happening on the screen, including what applications are open, what specific content is being displayed, what the user is actively doing, any commands being executed, and the current state of any processes. Include information about visible text, file names, error messages, or any ongoing activities. Explain the context and purpose of what the user appears to be working on based on the visible elements."""
 
-    def _parse_screen_analysis(self, analysis_text: str) -> Dict[str, Any]:
+    def _parse_screen_analysis(self, analysis_text: str, expect_coordinates: bool = False) -> Dict[str, Any]:
         """Parse screen analysis text to extract structured information."""
+
+        # If we expect coordinates, try to parse as JSON first
+        if expect_coordinates:
+            try:
+                # Try to parse as JSON (coordinate mode)
+                json_data = json.loads(analysis_text.strip())
+
+                # Validate required fields
+                if isinstance(json_data, dict) and all(key in json_data for key in ["description", "programs_detected", "ui_state", "actionable_elements"]):
+                    return {
+                        "description": json_data.get("description", ""),
+                        "programs": json_data.get("programs_detected", []),
+                        "ui_state": json_data.get("ui_state", ""),
+                        "actionable_elements": json_data.get("actionable_elements", ""),
+                        "clickable_elements": json_data.get("clickable_elements", [])
+                    }
+
+            except (json.JSONDecodeError, KeyError) as e:
+                logger.warning(f"Failed to parse JSON response for coordinates: {e}. Falling back to text parsing.")
+
+        # Default text parsing (original functionality)
         parsed = {
             "description": analysis_text,
             "programs": [],
             "ui_state": "",
-            "actionable_elements": ""
+            "actionable_elements": "",
+            "clickable_elements": [] if expect_coordinates else None
         }
 
         # Simple keyword extraction for common applications
@@ -1182,7 +1237,7 @@ Describe in detail what's happening on the screen, including what applications a
             "Visual Studio Code": ["vs code", "vscode", "visual studio code"],
             "Chrome": ["chrome", "google chrome", "browser"],
             "Firefox": ["firefox", "mozilla"],
-            "Terminal": ["terminal", "command line", "bash", "shell"],
+            "Terminal": ["terminal", "command line", "bash", "shell", "alacritty"],
             "File Manager": ["file manager", "explorer", "finder", "nautilus"],
             "Text Editor": ["text editor", "notepad", "gedit"],
             "IDE": ["ide", "integrated development"]
@@ -1194,14 +1249,23 @@ Describe in detail what's happening on the screen, including what applications a
                 parsed["programs"].append(app_name)
 
         # Extract UI state information
-        if "coding" in analysis_lower or "programming" in analysis_lower:
+        if "coding" in analysis_lower or "programming" in analysis_lower or "development" in analysis_lower:
             parsed["ui_state"] = "Active development/coding session"
         elif "browsing" in analysis_lower or "web" in analysis_lower:
             parsed["ui_state"] = "Web browsing session"
         elif "writing" in analysis_lower or "document" in analysis_lower:
             parsed["ui_state"] = "Document editing/writing"
+        elif "debugging" in analysis_lower or "debug" in analysis_lower:
+            parsed["ui_state"] = "Debugging session"
         else:
             parsed["ui_state"] = "General desktop usage"
+
+        # Extract actionable elements from text if not already set
+        if not parsed["actionable_elements"]:
+            if "button" in analysis_lower or "menu" in analysis_lower:
+                parsed["actionable_elements"] = "Interactive UI elements detected"
+            else:
+                parsed["actionable_elements"] = "Standard desktop interface"
 
         return parsed
 

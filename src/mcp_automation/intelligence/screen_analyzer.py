@@ -30,6 +30,7 @@ class ScreenAnalysis(BaseModel):
     actionable_elements: str
     visual_context: str
     ocr_text: Optional[str] = None
+    clickable_elements: Optional[List[Dict[str, Any]]] = None
     provider_used: str
     message: str
 
@@ -135,6 +136,7 @@ class ScreenAnalyzer:
                     actionable_elements="",
                     visual_context="",
                     ocr_text=None,
+                    clickable_elements=None,
                     provider_used="unknown",
                     message="Failed to capture screenshot"
                 ).model_dump()
@@ -146,11 +148,14 @@ class ScreenAnalyzer:
             analysis_tasks = []
 
             # Always run vision analysis (primary analysis method)
+            # When include_ocr=False, we want coordinates; when include_ocr=True, we want text
+            include_coordinates = not include_ocr
             analysis_tasks.append(
                 self.ocr_engine.analyze_screen_content(
                     image_data,
                     detail_level=analysis_detail,
-                    preferred_provider=vision_provider
+                    preferred_provider=vision_provider,
+                    include_coordinates=include_coordinates
                 )
             )
 
@@ -189,6 +194,7 @@ class ScreenAnalyzer:
                     actionable_elements="",
                     visual_context="",
                     ocr_text=None,
+                    clickable_elements=None,
                     provider_used=vision_result.get("provider_used", "unknown") if vision_result else "unknown",
                     message=f"Vision analysis failed: {vision_result.get('message', 'Unknown error') if vision_result else 'Vision analysis returned no result'}"
                 ).model_dump()
@@ -215,6 +221,7 @@ class ScreenAnalyzer:
                 actionable_elements=vision_result.get("actionable_elements", ""),
                 visual_context=vision_result.get("visual_context", ""),
                 ocr_text=ocr_text,
+                clickable_elements=vision_result.get("clickable_elements"),
                 provider_used=vision_result.get("provider_used", "unknown"),
                 message=f"Screen analysis completed successfully in {processing_time:.3f}s using {vision_result.get('provider_used', 'unknown')}"
             ).model_dump()
@@ -232,6 +239,7 @@ class ScreenAnalyzer:
                 actionable_elements="",
                 visual_context="",
                 ocr_text=None,
+                clickable_elements=None,
                 provider_used="unknown",
                 message=f"Screen analysis failed: {str(e)}"
             ).model_dump()

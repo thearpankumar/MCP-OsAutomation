@@ -50,13 +50,26 @@ selenium.click(x=445, y=123)
 
 ### MCP WebAutomation (Intelligent)
 ```python
-# Understands and adapts
-screen = analyze_screen(analysis_detail="standard", vision_provider="openai")
-# Returns: "The desktop shows VS Code editor with file browser open, user editing main.py..."
+# 🎯 COORDINATE MODE: Get precise click locations
+screen = analyze_screen(include_ocr=False, vision_provider="openai")
+# Returns: Semantic description + clickable element coordinates
+# {
+#   "screen_description": "VS Code editor with file browser open...",
+#   "programs_detected": ["Visual Studio Code"],
+#   "clickable_elements": [
+#     {"type": "button", "text": "Save", "x": 150, "y": 200, "width": 80, "height": 30},
+#     {"type": "menu", "text": "File", "x": 50, "y": 25, "width": 40, "height": 20}
+#   ]
+# }
 
-if "VS Code" in screen["programs_detected"]:
-    # Intelligent context-aware actions
-    click_element(element_text="Save")  # Works regardless of theme/layout
+# 📝 TEXT MODE: Extract readable content
+text_screen = analyze_screen(include_ocr=True, vision_provider="openai")
+# Returns: Semantic description + OCR text (no coordinates)
+
+# Now Claude Code knows EXACTLY where to click!
+if screen["clickable_elements"]:
+    save_button = next(el for el in screen["clickable_elements"] if "save" in el["text"].lower())
+    click_element(x=save_button["x"], y=save_button["y"])
 ```
 
 ## 🎯 Real-World Magic
@@ -89,14 +102,27 @@ Instead of hardcoded coordinates, the system **understands** forms:
 - No UI mapping or screenshot databases
 - Works out-of-the-box with any application
 
-### 3. **Streamlined MCP Tools**
+### 3. **Enhanced MCP Tools**
 ```python
 # 5 powerful tools for complete desktop control:
-analyze_screen()           # LLM vision analysis of current screen
+analyze_screen()           # 🎯 DUAL MODE: Coordinates OR Text extraction
 click_element()           # Smart clicking by coordinates or text
 type_text()              # Intelligent text input
 press_key()              # Keyboard shortcuts and combinations
 emergency_stop()         # Safety stop for all automation
+```
+
+**🚀 NEW: Dual-Mode analyze_screen()**
+```python
+# COORDINATE MODE (include_ocr=False)
+# → Returns clickable element coordinates for precise automation
+screen = analyze_screen(include_ocr=False)
+# Result: {"clickable_elements": [{"type": "button", "text": "Save", "x": 150, "y": 200}]}
+
+# TEXT MODE (include_ocr=True)
+# → Returns OCR text content for reading screen information
+screen = analyze_screen(include_ocr=True)
+# Result: {"ocr_text": "Welcome to VS Code...", "clickable_elements": null}
 ```
 
 ### 4. **Intelligent Error Recovery**
@@ -218,7 +244,7 @@ Our streamlined toolkit provides everything needed for intelligent desktop autom
 
 | Tool | Purpose | Example |
 |------|---------|---------|
-| `analyze_screen()` | LLM vision analysis with optional OCR | Get semantic understanding of current screen |
+| `analyze_screen()` | **🎯 DUAL MODE**: Coordinates OR OCR text | `include_ocr=False` → Get clickable coordinates<br/>`include_ocr=True` → Extract text content |
 | `click_element()` | Smart clicking by coordinates or text | Click buttons, links, or UI elements |
 | `type_text()` | Intelligent text input with options | Fill forms, enter commands, write text |
 | `press_key()` | Keyboard shortcuts and combinations | Ctrl+S, Alt+Tab, function keys |

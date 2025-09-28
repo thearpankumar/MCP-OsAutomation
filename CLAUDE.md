@@ -1,364 +1,160 @@
-# Claude Code Instructions for MCP WebAutomation
+# MCP WebAutomation - Claude Code Instructions
 
-## Overview
-This MCP WebAutomation server provides intelligent desktop automation capabilities. As Claude Code, you can use these tools to analyze screens, control the desktop, and automate complex workflows through semantic understanding rather than rigid coordinate-based scripts.
+## Environment Setup
+- **System**: Single monitor setup with terminal-based workflow
+- **Primary Interface**: Terminal/CLI applications preferred
+- **Display**: One screen with multiple applications via Alt+Tab switching
 
-## Available Tools (5 Total)
-
+## Tools Available
 | Tool | Purpose |
 |------|---------|
-| `analyze_screen()` | LLM vision analysis of current screen (with optional OCR) |
-| `click_element()` | Smart clicking by coordinates or text |
-| `type_text()` | Intelligent text input with options |
-| `press_key()` | Keyboard shortcuts and combinations |
-| `emergency_stop()` | Safety stop for all automation |
+| `analyze_screen()` | **DUAL MODE**: Get coordinates OR extract text |
+| `click_element()` | Click by coordinates or text |
+| `type_text()` | Type text with options |
+| `press_key()` | Keyboard shortcuts |
+| `emergency_stop()` | Stop all automation |
 
-**Key Changes**: Removed `capture_screen` and `find_text` tools to eliminate token overflow issues and redundancy.
+## Workflow Protocol
 
-## Quick Start for Claude Code
-
-### 1. Understanding Screen Context
-Use `analyze_screen` as your primary tool for understanding what's currently on the user's screen:
-
+### 1. Task Analysis & Program Discovery
+Before performing any task:
 ```python
-# Get semantic understanding of the current screen
-result = mcp.call_tool("analyze_screen", {
-    "analysis_detail": "standard",
-    "vision_provider": "openai"
-})
+# Step 1: Switch to see available programs
+mcp.call_tool("press_key", {"key": "tab", "modifiers": ["alt"]})
 
-# The result contains:
-# - screen_description: Natural language description
-# - programs_detected: List of applications (e.g., ["Visual Studio Code", "Chrome"])
-# - ui_state: Current activity (e.g., "Active development/coding session")
-# - actionable_elements: What the user can interact with
+# Step 2: Analyze current screen to understand what's available
+screen = mcp.call_tool("analyze_screen", {"include_ocr": False})
+
+# Step 3: Check if required programs are running via bash
+result = mcp.call_tool("bash_command", {"command": "pgrep -l firefox|chrome|code|terminal"})
 ```
 
-### 2. Key Principles for Effective Usage
-
-#### Always Analyze First
-Before taking any automation actions, understand the current screen state:
+### 2. Program Navigation Strategy
 ```python
-# ✅ Good: Understand context first
-screen = mcp.call_tool("analyze_screen")
-print(f"Current context: {screen['screen_description']}")
-print(f"Available actions: {screen['actionable_elements']}")
+# Navigate through applications using Alt+Tab until target found
+def find_target_program(target_program):
+    max_attempts = 10
+    for attempt in range(max_attempts):
+        screen = mcp.call_tool("analyze_screen", {"include_ocr": False})
 
-# Then proceed with automation based on understanding
-```
-
-#### Use Semantic Understanding Over Coordinates
-The vision analysis provides meaningful context instead of raw coordinates:
-```python
-# ✅ Good: Use semantic understanding
-if "Visual Studio Code" in screen['programs_detected']:
-    # User is coding, suggest development-related actions
-
-if "coding session" in screen['ui_state']:
-    # Adapt behavior to development workflow
-```
-
-### 3. Common Automation Patterns
-
-#### Pattern 1: Smart Element Finding
-```python
-# Click UI elements by text rather than hardcoded coordinates
-mcp.call_tool("click_element", {
-    "element_text": "Save"
-})
-
-# Or get screen analysis with OCR for text finding
-screen = mcp.call_tool("analyze_screen", {
-    "include_ocr": True
-})
-# Then use coordinates if needed
-```
-
-#### Pattern 2: Context-Aware Automation
-```python
-# Adapt actions based on detected programs
-screen = mcp.call_tool("analyze_screen")
-
-if "Chrome" in screen['programs_detected']:
-    # Browser-specific automation
-    mcp.call_tool("press_key", {"key": "f5"})  # Refresh page
-
-elif "Visual Studio Code" in screen['programs_detected']:
-    # IDE-specific automation
-    mcp.call_tool("press_key", {"key": "s", "modifiers": ["ctrl"]})  # Save file
-```
-
-#### Pattern 3: Multi-Step Workflows
-```python
-# Complex automation with verification
-def automate_form_filling():
-    # 1. Understand current state
-    screen = mcp.call_tool("analyze_screen", {"analysis_detail": "detailed"})
-
-    # 2. Verify we're in the right context
-    if "form" not in screen['screen_description'].lower():
-        return {"error": "No form detected on screen"}
-
-    # 3. Fill form fields
-    mcp.call_tool("click_element", {"x": 200, "y": 100})
-    mcp.call_tool("type_text", {"text": "John Doe", "clear_first": True})
-
-    # 4. Move to next field
-    mcp.call_tool("press_key", {"key": "tab"})
-    mcp.call_tool("type_text", {"text": "john@example.com"})
-
-    # 5. Submit
-    mcp.call_tool("click_element", {"element_text": "Submit"})
-```
-
-## Tool Reference for Claude Code
-
-### Primary Analysis Tool
-
-#### `analyze_screen` - Your Main Intelligence Tool
-**When to use**: Before any automation, to understand context, verify state changes
-
-**Key parameters**:
-- `analysis_detail`: Use "standard" for most cases, "detailed" for complex UIs
-- `include_ocr`: Set to `true` only when you need exact text extraction
-- `vision_provider`: Defaults to "openai", fallback to "claude" or "gemini"
-
-**Best practices**:
-```python
-# For general understanding
-screen = mcp.call_tool("analyze_screen")
-
-# For detailed UI analysis
-detailed = mcp.call_tool("analyze_screen", {
-    "analysis_detail": "detailed",
-    "include_ocr": True  # Only when text extraction needed
-})
-
-# For quick verification
-brief = mcp.call_tool("analyze_screen", {"analysis_detail": "brief"})
-```
-
-### Action Tools
-
-#### `click_element` - Smart Clicking
-```python
-# Precise clicking with context
-mcp.call_tool("click_element", {
-    "x": 150, "y": 75,
-    "element_text": "Save Button"  # For logging/debugging
-})
-
-# Right-click for context menus
-mcp.call_tool("click_element", {
-    "x": 300, "y": 200,
-    "button": "right"
-})
-```
-
-#### `type_text` - Intelligent Text Input
-```python
-# Safe text input with clearing
-mcp.call_tool("type_text", {
-    "text": "Hello World",
-    "clear_first": True,  # Clear existing text
-    "delay": 0.05  # Faster typing for efficiency
-})
-
-# Text input with submission
-mcp.call_tool("type_text", {
-    "text": "search query",
-    "submit": True  # Press Enter after typing
-})
-```
-
-#### `press_key` - Keyboard Automation
-```python
-# Common shortcuts
-mcp.call_tool("press_key", {"key": "s", "modifiers": ["ctrl"]})  # Save
-mcp.call_tool("press_key", {"key": "c", "modifiers": ["ctrl"]})  # Copy
-mcp.call_tool("press_key", {"key": "z", "modifiers": ["ctrl"]})  # Undo
-
-# Navigation
-mcp.call_tool("press_key", {"key": "tab"})      # Next field
-mcp.call_tool("press_key", {"key": "enter"})    # Confirm
-mcp.call_tool("press_key", {"key": "escape"})   # Cancel
-```
-
-### Safety Tools
-
-#### `emergency_stop` - Safety Control
-```python
-# Stop all automation immediately
-result = mcp.call_tool("emergency_stop")
-print(f"Status: {result['status']}")  # "stopped"
-```
-
-## Advanced Usage Patterns for Claude Code
-
-### 1. Adaptive Automation
-```python
-def smart_automation():
-    """Automation that adapts to current context"""
-    context = mcp.call_tool("analyze_screen")
-
-    # Adapt based on detected programs
-    programs = context['programs_detected']
-
-    if "Visual Studio Code" in programs:
-        return handle_ide_automation()
-    elif "Chrome" in programs or "Firefox" in programs:
-        return handle_browser_automation()
-    elif "Terminal" in programs:
-        return handle_terminal_automation()
-    else:
-        return {"message": "Context not recognized for automation"}
-```
-
-### 2. Error Recovery
-```python
-def robust_click_action(element_text, max_retries=3):
-    """Click with verification and retry logic"""
-    for attempt in range(max_retries):
-        # Use smart element clicking
-        click_result = mcp.call_tool("click_element", {
-            "element_text": element_text
-        })
-
-        if click_result["success"]:
-            return click_result
-
-        # Wait and retry
-        time.sleep(1)
-
-    return {"error": f"Failed to click {element_text} after {max_retries} attempts"}
-```
-
-### 3. State Verification
-```python
-def verify_action_completed(expected_state_keywords):
-    """Verify that an action had the expected effect"""
-    # Wait a moment for UI to update
-    time.sleep(2)
-
-    # Check new state
-    new_state = mcp.call_tool("analyze_screen", {"analysis_detail": "brief"})
-    description = new_state['screen_description'].lower()
-
-    # Check if expected keywords are present
-    for keyword in expected_state_keywords:
-        if keyword.lower() in description:
+        if target_program.lower() in screen["screen_description"].lower():
             return True
 
+        # Switch to next program
+        mcp.call_tool("press_key", {"key": "tab", "modifiers": ["alt"]})
+
     return False
-
-# Usage example
-mcp.call_tool("click_element", {"x": 100, "y": 200})
-if verify_action_completed(["dialog", "popup", "modal"]):
-    print("Dialog opened successfully")
 ```
 
-## Best Practices for Claude Code
+### 3. Task Execution Priority
+1. **PREFER BASH**: If task can be done via terminal commands
+2. **GUI FALLBACK**: Use desktop automation only when necessary
+3. **HYBRID APPROACH**: Combine bash + GUI for optimal efficiency
 
-### 1. Always Use Context First
+### 4. Complete Task Workflow
 ```python
-# ✅ Good pattern
-def intelligent_automation():
-    # Understand before acting
-    context = mcp.call_tool("analyze_screen")
+def execute_user_task(user_request):
+    # Step 1: Analyze what user wants
+    # Step 2: Check if bash can handle it
+    if can_use_bash(user_request):
+        return execute_bash_solution(user_request)
 
-    # Make decisions based on understanding
-    if "form" in context['screen_description'].lower():
-        return handle_form_interaction()
-    elif "menu" in context['actionable_elements'].lower():
-        return handle_menu_navigation()
+    # Step 3: Find required GUI program
+    target_program = determine_required_program(user_request)
+
+    # Step 4: Navigate to program
+    if find_target_program(target_program):
+        return execute_gui_task(user_request)
+    else:
+        # Step 5: Launch program if not running
+        launch_program(target_program)
+        return execute_gui_task(user_request)
 ```
 
-### 2. Prefer Text-Based Element Finding
+## Mandatory Workflow Steps
+
+### Before ANY Task
+1. **Alt+Tab** to survey available programs
+2. **analyze_screen()** to understand current state
+3. **Check bash first** - prefer terminal solutions
+4. **Navigate to correct program** using Alt+Tab
+5. **Execute task** with appropriate method
+
+## Core Usage
+
+### analyze_screen - Two Modes
 ```python
-# ✅ Better: Smart clicking by text (robust)
+# COORDINATE MODE: Get clickable elements
+screen = mcp.call_tool("analyze_screen", {"include_ocr": False})
+# Returns: clickable_elements with x,y coordinates
+
+# TEXT MODE: Extract screen text
+screen = mcp.call_tool("analyze_screen", {"include_ocr": True})
+# Returns: ocr_text content, no coordinates
+```
+
+### Essential Patterns
+```python
+# 1. Always analyze first
+screen = mcp.call_tool("analyze_screen", {"include_ocr": False})
+
+# 2. Find and click with coordinates
+if screen["clickable_elements"]:
+    button = next((el for el in screen["clickable_elements"]
+                   if "save" in el["text"].lower()), None)
+    if button:
+        mcp.call_tool("click_element", {"x": button["x"], "y": button["y"]})
+
+# 3. Alternative text-based clicking
 mcp.call_tool("click_element", {"element_text": "Save"})
 
-# ✅ Also good: Use analyze_screen for complex scenarios
-screen = mcp.call_tool("analyze_screen", {"include_ocr": True})
-# Then use the screen analysis to understand context
-
-# ❌ Avoid: Hardcoded coordinates (brittle)
-mcp.call_tool("click_element", {"x": 100, "y": 200})  # May break on different screens
+# 4. Common keyboard shortcuts
+mcp.call_tool("press_key", {"key": "s", "modifiers": ["ctrl"]})  # Save
+mcp.call_tool("press_key", {"key": "tab"})  # Next field
 ```
 
-### 3. Use Appropriate Detail Levels
+## Key Parameters
+- `analysis_detail`: "brief", "standard", "detailed"
+- `vision_provider`: "openai" (default), "claude", "gemini"
+- `include_ocr`: `false` = coordinates, `true` = text
+
+## Practical Examples
+
+### Example 1: File Operations (PREFER BASH)
 ```python
-# Quick verification
-brief = mcp.call_tool("analyze_screen", {"analysis_detail": "brief"})
-
-# General automation
-standard = mcp.call_tool("analyze_screen", {"analysis_detail": "standard"})
-
-# Complex UI analysis
-detailed = mcp.call_tool("analyze_screen", {"analysis_detail": "detailed"})
+# User: "Create a new file called test.txt"
+# DON'T: Open file manager GUI
+# DO: Use bash command
+bash_result = bash("touch test.txt && echo 'File created: test.txt'")
 ```
 
-### 4. Handle Errors Gracefully
+### Example 2: Browser Task (GUI Required)
 ```python
-def safe_automation():
-    try:
-        result = mcp.call_tool("analyze_screen")
-        if not result["success"]:
-            return {"error": "Screen analysis failed", "details": result["message"]}
-
-        # Continue with automation...
-
-    except Exception as e:
-        return {"error": "Automation failed", "exception": str(e)}
+# User: "Open YouTube and search for tutorials"
+# Step 1: Check programs
+mcp.call_tool("press_key", {"key": "tab", "modifiers": ["alt"]})
+# Step 2: Find browser or launch it
+if not find_target_program("firefox"):
+    bash("firefox &")
+# Step 3: Navigate and search
 ```
 
-## Common Use Cases
-
-### Web Automation
+### Example 3: Code Editing (HYBRID)
 ```python
-# Navigate and fill web forms
-context = mcp.call_tool("analyze_screen")
-if "browser" in context['screen_description'].lower():
-    # Browser-specific automation
-    pass
+# User: "Edit main.py and add a print statement"
+# Option 1: Bash (if simple)
+bash("echo 'print(\"Hello World\")' >> main.py")
+# Option 2: VS Code (if complex)
+find_target_program("Visual Studio Code")
+# Then use GUI automation
 ```
 
-### IDE Automation
-```python
-# Code editor automation
-if "Visual Studio Code" in context['programs_detected']:
-    # Save current file
-    mcp.call_tool("press_key", {"key": "s", "modifiers": ["ctrl"]})
-```
+## Critical Rules
+- **ALWAYS** start with Alt+Tab + analyze_screen
+- **ALWAYS** prefer bash for file/system operations
+- **ONLY** use GUI when bash cannot accomplish the task
+- **NAVIGATE** programs with Alt+Tab, not clicking taskbar
 
-### System Navigation
-```python
-# File manager operations
-if "File Manager" in context['programs_detected']:
-    # Navigate directories
-    pass
-```
-
-## Troubleshooting for Claude Code
-
-### Screen Analysis Issues
-- Use `"analysis_detail": "detailed"` for better program detection
-- Try different `vision_provider` if one fails (openai → claude → gemini)
-- Check that screenshot capture is successful first
-
-### Element Finding Issues
-- Lower `confidence` threshold for fuzzy text matching
-- Use `region` parameter to search in specific areas
-- Verify text exists with OCR: `"include_ocr": true`
-
-### Action Failures
-- Always verify screen state before actions
-- Use `get_mouse_position` to debug coordinate issues
-- Add delays between actions for UI updates
-
-## Security Notes
-- All actions are rate-limited for safety
-- Permission levels: Safe (screenshots) → Moderate (clicks) → Dangerous (system)
-- Use test mode first: `python start_server.py --test`
-
-This MCP server transforms desktop automation from brittle coordinate-based scripts into intelligent, context-aware workflows that adapt to what's actually on screen.
+## Testing
+- Run `python start_server.py --test` to verify functionality
+- Use `emergency_stop()` if automation goes wrong
